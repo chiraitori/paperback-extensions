@@ -178,7 +178,8 @@ export class Pixiv extends Source {
         }
 
         const illust = data.data
-        const tags = (illust.tags ?? []).map((tag: any) => App.createTag({
+        const tagsArray = illust.tags?.tags ?? []
+        const tags = tagsArray.map((tag: any) => App.createTag({
             id: tag.tag,
             label: tag.tag
         }))
