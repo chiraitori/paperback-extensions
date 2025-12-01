@@ -10,20 +10,15 @@ import {
     Request,
     Response,
     SearchRequest,
-    DUISection,
     Source,
     SourceInfo,
-    SourceStateManager,
     TagSection,
     BadgeColor,
     SourceInterceptor,
     SourceIntents,
 } from '@paperback/types'
 
-import { 
-    getServerURL,
-    serverSettingsMenu,
-} from './Settings'
+const SERVER_URL = 'https://image.chiraitori.io.vn'
 
 export const PixivInfo: SourceInfo = {
     version: '1.0.0',
@@ -36,24 +31,14 @@ export const PixivInfo: SourceInfo = {
     websiteBaseURL: 'https://www.pixiv.net',
     sourceTags: [
         {
-            text: 'Self hosted',
-            type: BadgeColor.RED
-        },
-        {
             text: '18+',
             type: BadgeColor.YELLOW
         },
     ],
-    intents: SourceIntents.MANGA_CHAPTERS | SourceIntents.HOMEPAGE_SECTIONS | SourceIntents.SETTINGS_UI
+    intents: SourceIntents.MANGA_CHAPTERS | SourceIntents.HOMEPAGE_SECTIONS
 }
 
 export class PixivInterceptor implements SourceInterceptor {
-    stateManager: SourceStateManager
-
-    constructor(stateManager: SourceStateManager) {
-        this.stateManager = stateManager
-    }
-
     async interceptResponse(response: Response): Promise<Response> {
         return response
     }
@@ -64,30 +49,18 @@ export class PixivInterceptor implements SourceInterceptor {
 }
 
 export class Pixiv extends Source {
-    stateManager = App.createSourceStateManager()
     requestManager = App.createRequestManager({
         requestsPerSecond: 4,
         requestTimeout: 20000,
-        interceptor: new PixivInterceptor(this.stateManager)
+        interceptor: new PixivInterceptor()
     })
 
     override getMangaShareUrl(mangaId: string): string {
         return `https://www.pixiv.net/artworks/${mangaId}`
     }
 
-    override async getSourceMenu(): Promise<DUISection> {
-        return App.createDUISection({
-            id: 'main',
-            header: 'Source Settings',
-            isHidden: false,
-            rows: async () => [
-                serverSettingsMenu(this.stateManager),
-            ]
-        })
-    }
-
-    async getServerUrl(): Promise<string> {
-        return await getServerURL(this.stateManager)
+    getServerUrl(): string {
+        return SERVER_URL
     }
 
     override async supportsTagExclusion(): Promise<boolean> {
@@ -95,11 +68,7 @@ export class Pixiv extends Source {
     }
 
     override async getHomePageSections(sectionCallback: (section: HomeSection) => void): Promise<void> {
-        const serverUrl = await this.getServerUrl()
-        if (!serverUrl) {
-            console.log('Server URL not set')
-            return
-        }
+        const serverUrl = this.getServerUrl()
 
         const sections = [
             App.createHomeSection({
@@ -163,7 +132,7 @@ export class Pixiv extends Source {
     }
 
     override async getViewMoreItems(homepageSectionId: string, metadata: any): Promise<PagedResults> {
-        const serverUrl = await this.getServerUrl()
+        const serverUrl = this.getServerUrl()
         const page = metadata?.page ?? 1
 
         const request = App.createRequest({
@@ -194,7 +163,7 @@ export class Pixiv extends Source {
     }
 
     override async getMangaDetails(mangaId: string): Promise<SourceManga> {
-        const serverUrl = await this.getServerUrl()
+        const serverUrl = this.getServerUrl()
 
         const request = App.createRequest({
             url: `${serverUrl}/api/illust/${mangaId}`,
@@ -246,7 +215,7 @@ export class Pixiv extends Source {
     }
 
     override async getChapterDetails(mangaId: string, chapterId: string): Promise<ChapterDetails> {
-        const serverUrl = await this.getServerUrl()
+        const serverUrl = this.getServerUrl()
 
         const request = App.createRequest({
             url: `${serverUrl}/api/illust/${chapterId}?pages=true`,
@@ -276,7 +245,7 @@ export class Pixiv extends Source {
     }
 
     override async getSearchResults(query: SearchRequest, metadata: any): Promise<PagedResults> {
-        const serverUrl = await this.getServerUrl()
+        const serverUrl = this.getServerUrl()
         const page = metadata?.page ?? 1
         const searchQuery = query.title ?? ''
 
