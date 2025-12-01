@@ -602,7 +602,8 @@ class Pixiv extends types_1.Source {
             throw new Error(data.message);
         }
         const illust = data.data;
-        const tags = (illust.tags ?? []).map((tag) => App.createTag({
+        const tagsArray = illust.tags?.tags ?? [];
+        const tags = tagsArray.map((tag) => App.createTag({
             id: tag.tag,
             label: tag.tag
         }));
