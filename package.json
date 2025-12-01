@@ -1,8 +1,8 @@
 {
-  "name": "extensions-default",
+  "name": "paperback-extensions",
   "version": "1.0.0",
-  "repositoryName": "Default Extensions",
-  "description": "Default extensions for Paperback 0.8",
+  "repositoryName": "Pixiv Paperback Extension",
+  "description": "Pixiv extension for Paperback 0.8 with custom proxy server",
   "main": "lib/index.js",
   "scripts": {
     "test": "npx paperback test",
@@ -13,14 +13,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Paperback-iOS/extensions"
+    "url": "git+https://github.com/chiraitori/paperback-extensions"
   },
-  "author": "Paperback",
+  "author": "chiraitori",
   "license": "GPL-3.0-or-later",
   "bugs": {
-    "url": "https://github.com/Paperback-iOS/extensions/issues"
+    "url": "https://github.com/chiraitori/paperback-extensions/issues"
   },
-  "homepage": "https://github.com/Paperback-iOS/extensions#readme",
+  "homepage": "https://github.com/chiraitori/paperback-extensions#readme",
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^4.25.0",
     "@typescript-eslint/parser": "^4.25.0",
