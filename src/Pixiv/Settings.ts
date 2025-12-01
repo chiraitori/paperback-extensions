@@ -4,7 +4,7 @@ import {
 } from '@paperback/types'
 
 export const getServerURL = async (stateManager: SourceStateManager): Promise<string> => {
-    return (await stateManager.retrieve('serverURL') as string) ?? ''
+    return (await stateManager.retrieve('serverURL') as string) ?? 'https://image.chiraitori.io.vn'
 }
 
 export const serverSettingsMenu = (stateManager: SourceStateManager): DUINavigationButton => {
@@ -19,7 +19,7 @@ export const serverSettingsMenu = (stateManager: SourceStateManager): DUINavigat
                     App.createDUISection({
                         id: 'server',
                         header: 'Image-API Server',
-                        footer: 'Enter the URL of your image-api server (e.g., http://192.168.1.100:8080)',
+                        footer: 'Enter the URL of your image-api server (default: https://image.chiraitori.io.vn)',
                         isHidden: false,
                         rows: async () => [
                             App.createDUIInputField({
