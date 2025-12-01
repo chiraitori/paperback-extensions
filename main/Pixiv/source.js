@@ -462,7 +462,7 @@ __exportStar(require("./compat/DyamicUI"), exports);
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Pixiv = exports.PixivInterceptor = exports.PixivInfo = void 0;
 const types_1 = require("@paperback/types");
-const Settings_1 = require("./Settings");
+const SERVER_URL = 'https://image.chiraitori.io.vn';
 exports.PixivInfo = {
     version: '1.0.0',
     name: 'Pixiv',
@@ -474,20 +474,13 @@ exports.PixivInfo = {
     websiteBaseURL: 'https://www.pixiv.net',
     sourceTags: [
         {
-            text: 'Self hosted',
-            type: types_1.BadgeColor.RED
-        },
-        {
             text: '18+',
             type: types_1.BadgeColor.YELLOW
         },
     ],
-    intents: types_1.SourceIntents.MANGA_CHAPTERS | types_1.SourceIntents.HOMEPAGE_SECTIONS | types_1.SourceIntents.SETTINGS_UI
+    intents: types_1.SourceIntents.MANGA_CHAPTERS | types_1.SourceIntents.HOMEPAGE_SECTIONS
 };
 class PixivInterceptor {
-    constructor(stateManager) {
-        this.stateManager = stateManager;
-    }
     async interceptResponse(response) {
         return response;
     }
@@ -499,38 +492,23 @@ exports.PixivInterceptor = PixivInterceptor;
 class Pixiv extends types_1.Source {
     constructor() {
         super(...arguments);
-        this.stateManager = App.createSourceStateManager();
         this.requestManager = App.createRequestManager({
             requestsPerSecond: 4,
             requestTimeout: 20000,
-            interceptor: new PixivInterceptor(this.stateManager)
+            interceptor: new PixivInterceptor()
         });
     }
     getMangaShareUrl(mangaId) {
         return `https://www.pixiv.net/artworks/${mangaId}`;
     }
-    async getSourceMenu() {
-        return App.createDUISection({
-            id: 'main',
-            header: 'Source Settings',
-            isHidden: false,
-            rows: async () => [
-                (0, Settings_1.serverSettingsMenu)(this.stateManager),
-            ]
-        });
-    }
-    async getServerUrl() {
-        return await (0, Settings_1.getServerURL)(this.stateManager);
+    getServerUrl() {
+        return SERVER_URL;
     }
     async supportsTagExclusion() {
         return false;
     }
     async getHomePageSections(sectionCallback) {
-        const serverUrl = await this.getServerUrl();
-        if (!serverUrl) {
-            console.log('Server URL not set');
-            return;
-        }
+        const serverUrl = this.getServerUrl();
         const sections = [
             App.createHomeSection({
                 id: 'daily',
@@ -587,7 +565,7 @@ class Pixiv extends types_1.Source {
         }
     }
     async getViewMoreItems(homepageSectionId, metadata) {
-        const serverUrl = await this.getServerUrl();
+        const serverUrl = this.getServerUrl();
         const page = metadata?.page ?? 1;
         const request = App.createRequest({
             url: `${serverUrl}/api/ranking?mode=${homepageSectionId}&page=${page}`,
@@ -613,7 +591,7 @@ class Pixiv extends types_1.Source {
         });
     }
     async getMangaDetails(mangaId) {
-        const serverUrl = await this.getServerUrl();
+        const serverUrl = this.getServerUrl();
         const request = App.createRequest({
             url: `${serverUrl}/api/illust/${mangaId}`,
             method: 'GET'
@@ -657,7 +635,7 @@ class Pixiv extends types_1.Source {
         ];
     }
     async getChapterDetails(mangaId, chapterId) {
-        const serverUrl = await this.getServerUrl();
+        const serverUrl = this.getServerUrl();
         const request = App.createRequest({
             url: `${serverUrl}/api/illust/${chapterId}?pages=true`,
             method: 'GET'
@@ -681,7 +659,7 @@ class Pixiv extends types_1.Source {
         });
     }
     async getSearchResults(query, metadata) {
-        const serverUrl = await this.getServerUrl();
+        const serverUrl = this.getServerUrl();
         const page = metadata?.page ?? 1;
         const searchQuery = query.title ?? '';
         if (!searchQuery) {
@@ -713,58 +691,5 @@ class Pixiv extends types_1.Source {
 }
 exports.Pixiv = Pixiv;
 
-},{"./Settings":63,"@paperback/types":61}],63:[function(require,module,exports){
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.serverSettingsMenu = exports.getServerURL = void 0;
-const getServerURL = async (stateManager) => {
-    return await stateManager.retrieve('serverURL') ?? 'https://image.chiraitori.io.vn';
-};
-exports.getServerURL = getServerURL;
-const serverSettingsMenu = (stateManager) => {
-    return App.createDUINavigationButton({
-        id: 'server_settings',
-        label: 'Server Settings',
-        form: App.createDUIForm({
-            sections: async () => {
-                const serverURL = await (0, exports.getServerURL)(stateManager);
-                return [
-                    App.createDUISection({
-                        id: 'server',
-                        header: 'Image-API Server',
-                        footer: 'Enter the URL of your image-api server (default: https://image.chiraitori.io.vn)',
-                        isHidden: false,
-                        rows: async () => [
-                            App.createDUIInputField({
-                                id: 'serverURL',
-                                label: 'Server URL',
-                                value: App.createDUIBinding({
-                                    get: async () => serverURL,
-                                    set: async (value) => {
-                                        await stateManager.store('serverURL', value);
-                                    }
-                                })
-                            }),
-                        ]
-                    }),
-                    App.createDUISection({
-                        id: 'info',
-                        header: 'Information',
-                        isHidden: false,
-                        rows: async () => [
-                            App.createDUILabel({
-                                id: 'info_label',
-                                label: 'How to use',
-                                value: '1. Run image-api server\n2. Enter server URL above\n3. Browse Pixiv manga!'
-                            }),
-                        ]
-                    }),
-                ];
-            }
-        })
-    });
-};
-exports.serverSettingsMenu = serverSettingsMenu;
-
-},{}]},{},[62])(62)
+},{"@paperback/types":61}]},{},[62])(62)
 });
