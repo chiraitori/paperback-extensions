@@ -1,5 +1,10 @@
 on: push
 name: Bundle and Publish Sources
+
+permissions:
+  contents: write
+  pages: write
+
 jobs:
   build:
     name: Bundle and Publish Sources
