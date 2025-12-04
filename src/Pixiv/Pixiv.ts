@@ -248,7 +248,12 @@ export class Pixiv extends Source {
     override async getSearchResults(query: SearchRequest, metadata: any): Promise<PagedResults> {
         const serverUrl = this.getServerUrl()
         const page = metadata?.page ?? 1
-        const searchQuery = query.title ?? ''
+        
+        // Get search query from title or from included tags
+        let searchQuery = query.title ?? ''
+        if (!searchQuery && query.includedTags && query.includedTags.length > 0) {
+            searchQuery = query.includedTags[0]?.id ?? ''
+        }
 
         if (!searchQuery) {
             return App.createPagedResults({ results: [] })
