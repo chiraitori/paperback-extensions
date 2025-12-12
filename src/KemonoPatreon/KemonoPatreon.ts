@@ -92,7 +92,8 @@ export class KemonoPatreon extends Source {
 
     getFileUrl(path: string): string {
         if (path.startsWith('http')) return path
-        return `${KEMONO_BASE_URL}${path}`
+        // Use proxy to bypass Kemono CDN DDoS protection
+        return `${KEMONO_API_URL}/proxy?path=${encodeURIComponent(path)}`
     }
 
     override async getHomePageSections(sectionCallback: (section: HomeSection) => void): Promise<void> {
