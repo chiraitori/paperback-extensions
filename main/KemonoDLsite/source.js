@@ -462,8 +462,8 @@ __exportStar(require("./compat/DyamicUI"), exports);
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KemonoDLsite = exports.KemonoDLsiteInfo = void 0;
 const types_1 = require("@paperback/types");
-const KEMONO_BASE_URL = 'https://kemono.su';
-const PROXY_URL = 'https://image.chiraitori.io.vn/api/kemono';
+const KEMONO_BASE_URL = 'https://kemono.cr';
+const KEMONO_API_URL = 'https://kemono.cr/api/v1';
 const SERVICE = 'dlsite';
 const SERVICE_NAME = 'DLsite';
 exports.KemonoDLsiteInfo = {
@@ -525,7 +525,7 @@ class KemonoDLsite extends types_1.Source {
         sectionCallback(section);
         try {
             const request = App.createRequest({
-                url: `${PROXY_URL}/${SERVICE}/posts`,
+                url: `${KEMONO_API_URL}/${SERVICE}/posts`,
                 method: 'GET'
             });
             const response = await this.requestManager.schedule(request, 1);
@@ -557,7 +557,7 @@ class KemonoDLsite extends types_1.Source {
     async getViewMoreItems(_homepageSectionId, metadata) {
         const offset = metadata?.offset ?? 0;
         const request = App.createRequest({
-            url: `${PROXY_URL}/${SERVICE}/posts?o=${offset}`,
+            url: `${KEMONO_API_URL}/${SERVICE}/posts?o=${offset}`,
             method: 'GET'
         });
         const response = await this.requestManager.schedule(request, 1);
@@ -587,7 +587,7 @@ class KemonoDLsite extends types_1.Source {
     async getMangaDetails(mangaId) {
         const [userId, postId] = mangaId.split('/');
         const request = App.createRequest({
-            url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+            url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
             method: 'GET'
         });
         const response = await this.requestManager.schedule(request, 1);
@@ -624,7 +624,7 @@ class KemonoDLsite extends types_1.Source {
         ];
         try {
             const request = App.createRequest({
-                url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+                url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
                 method: 'GET'
             });
             const response = await this.requestManager.schedule(request, 1);
@@ -660,7 +660,7 @@ class KemonoDLsite extends types_1.Source {
         }
         // Image chapter
         const request = App.createRequest({
-            url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+            url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
             method: 'GET'
         });
         const response = await this.requestManager.schedule(request, 1);
@@ -683,7 +683,7 @@ class KemonoDLsite extends types_1.Source {
         }
         try {
             const request = App.createRequest({
-                url: `${PROXY_URL}/creators`,
+                url: `${KEMONO_API_URL}/creators`,
                 method: 'GET'
             });
             const response = await this.requestManager.schedule(request, 1);

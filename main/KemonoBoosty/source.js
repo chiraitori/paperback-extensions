@@ -462,8 +462,8 @@ __exportStar(require("./compat/DyamicUI"), exports);
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KemonoBoosty = exports.KemonoBoostyInfo = void 0;
 const types_1 = require("@paperback/types");
-const KEMONO_BASE_URL = 'https://kemono.su';
-const PROXY_URL = 'https://image.chiraitori.io.vn/api/kemono';
+const KEMONO_BASE_URL = 'https://kemono.cr';
+const KEMONO_API_URL = 'https://kemono.cr/api/v1';
 const SERVICE = 'boosty';
 const SERVICE_NAME = 'Boosty';
 exports.KemonoBoostyInfo = {
@@ -483,7 +483,7 @@ exports.KemonoBoostyInfo = {
 };
 class KemonoInterceptor {
     async interceptResponse(response) { return response; }
-    async interceptRequest(request) { return request; }
+    async interceptRequest(request) { request.headers = { ...request.headers, 'Accept': 'text/css', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': KEMONO_BASE_URL }; return request; }
 }
 class KemonoBoosty extends types_1.Source {
     constructor() {
@@ -521,7 +521,7 @@ class KemonoBoosty extends types_1.Source {
         sectionCallback(section);
         try {
             const request = App.createRequest({
-                url: `${PROXY_URL}/${SERVICE}/posts`,
+                url: `${KEMONO_API_URL}/${SERVICE}/posts`,
                 method: 'GET'
             });
             const response = await this.requestManager.schedule(request, 1);
@@ -553,7 +553,7 @@ class KemonoBoosty extends types_1.Source {
     async getViewMoreItems(_homepageSectionId, metadata) {
         const offset = metadata?.offset ?? 0;
         const request = App.createRequest({
-            url: `${PROXY_URL}/${SERVICE}/posts?o=${offset}`,
+            url: `${KEMONO_API_URL}/${SERVICE}/posts?o=${offset}`,
             method: 'GET'
         });
         const response = await this.requestManager.schedule(request, 1);
@@ -580,7 +580,7 @@ class KemonoBoosty extends types_1.Source {
     async getMangaDetails(mangaId) {
         const [userId, postId] = mangaId.split('/');
         const request = App.createRequest({
-            url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+            url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
             method: 'GET'
         });
         const response = await this.requestManager.schedule(request, 1);
@@ -611,7 +611,7 @@ class KemonoBoosty extends types_1.Source {
         ];
         try {
             const request = App.createRequest({
-                url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+                url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
                 method: 'GET'
             });
             const response = await this.requestManager.schedule(request, 1);
@@ -645,7 +645,7 @@ class KemonoBoosty extends types_1.Source {
             });
         }
         const request = App.createRequest({
-            url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+            url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
             method: 'GET'
         });
         const response = await this.requestManager.schedule(request, 1);
@@ -661,7 +661,7 @@ class KemonoBoosty extends types_1.Source {
             return App.createPagedResults({ results: [] });
         try {
             const request = App.createRequest({
-                url: `${PROXY_URL}/creators`,
+                url: `${KEMONO_API_URL}/creators`,
                 method: 'GET'
             });
             const response = await this.requestManager.schedule(request, 1);
