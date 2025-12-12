@@ -18,8 +18,8 @@ import {
     SourceIntents,
 } from '@paperback/types'
 
-const KEMONO_BASE_URL = 'https://kemono.cr'
-const KEMONO_API_URL = 'https://kemono.cr/api/v1'
+const KEMONO_BASE_URL = 'https://kemono.su'
+const PROXY_URL = 'https://image.chiraitori.io.vn/api/kemono'
 const SERVICE = 'fanbox'
 const SERVICE_NAME = 'Fanbox'
 
@@ -105,7 +105,7 @@ export class KemonoFanbox extends Source {
         sectionCallback(section)
 
         try {
-            const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/posts`, method: 'GET' })
+            const request = App.createRequest({ url: `${PROXY_URL}/${SERVICE}/posts`, method: 'GET' })
             const response = await this.requestManager.schedule(request, 1)
             const posts: KemonoPost[] = JSON.parse(response.data ?? '[]')
 
@@ -131,7 +131,7 @@ export class KemonoFanbox extends Source {
 
     override async getViewMoreItems(_homepageSectionId: string, metadata: any): Promise<PagedResults> {
         const offset = metadata?.offset ?? 0
-        const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/posts?o=${offset}`, method: 'GET' })
+        const request = App.createRequest({ url: `${PROXY_URL}/${SERVICE}/posts?o=${offset}`, method: 'GET' })
         const response = await this.requestManager.schedule(request, 1)
         const posts: KemonoPost[] = JSON.parse(response.data ?? '[]')
 
@@ -153,7 +153,7 @@ export class KemonoFanbox extends Source {
 
     override async getMangaDetails(mangaId: string): Promise<SourceManga> {
         const [userId, postId] = mangaId.split('/')
-        const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`, method: 'GET' })
+        const request = App.createRequest({ url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`, method: 'GET' })
         const response = await this.requestManager.schedule(request, 1)
         const post: KemonoPost = JSON.parse(response.data ?? '{}')
 
@@ -177,7 +177,7 @@ export class KemonoFanbox extends Source {
         const [userId, postId] = mangaId.split('/')
         const chapters: Chapter[] = [App.createChapter({ id: `${postId}/images`, name: 'Images', chapNum: 1, langCode: 'en' })]
         try {
-            const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`, method: 'GET' })
+            const request = App.createRequest({ url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`, method: 'GET' })
             const response = await this.requestManager.schedule(request, 1)
             const post: KemonoPost = JSON.parse(response.data ?? '{}')
             const allFiles = [post.file, ...(post.attachments || [])].filter(f => f?.path)
@@ -197,7 +197,7 @@ export class KemonoFanbox extends Source {
             const videoPath = chapterId.split('/video/')[1]
             return App.createChapterDetails({ id: chapterId, mangaId: mangaId, pages: [this.getFileUrl(videoPath!)] })
         }
-        const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`, method: 'GET' })
+        const request = App.createRequest({ url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`, method: 'GET' })
         const response = await this.requestManager.schedule(request, 1)
         const post: KemonoPost = JSON.parse(response.data ?? '{}')
         const allFiles = [post.file, ...(post.attachments || [])].filter(f => f?.path)
@@ -210,7 +210,7 @@ export class KemonoFanbox extends Source {
         const searchQuery = query.title ?? ''
         if (!searchQuery) return App.createPagedResults({ results: [] })
         try {
-            const request = App.createRequest({ url: `${KEMONO_API_URL}/creators.txt`, method: 'GET' })
+            const request = App.createRequest({ url: `${PROXY_URL}/creators`, method: 'GET' })
             const response = await this.requestManager.schedule(request, 1)
             const creators: KemonoCreator[] = JSON.parse(response.data ?? '[]')
             const filtered = creators.filter(c => c.service === SERVICE && c.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(offset, offset + 20)

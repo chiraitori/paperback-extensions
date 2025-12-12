@@ -18,8 +18,8 @@ import {
     SourceIntents,
 } from '@paperback/types'
 
-const KEMONO_BASE_URL = 'https://kemono.cr'
-const KEMONO_API_URL = 'https://kemono.cr/api/v1'
+const KEMONO_BASE_URL = 'https://kemono.su'
+const PROXY_URL = 'https://image.chiraitori.io.vn/api/kemono'
 const SERVICE = 'afdian'
 const SERVICE_NAME = 'Afdian'
 
@@ -99,7 +99,7 @@ export class KemonoAfdian extends Source {
 
         try {
             const request = App.createRequest({
-                url: `${KEMONO_API_URL}/${SERVICE}/posts`,
+                url: `${PROXY_URL}/${SERVICE}/posts`,
                 method: 'GET'
             })
             const response = await this.requestManager.schedule(request, 1)
@@ -131,7 +131,7 @@ export class KemonoAfdian extends Source {
     override async getViewMoreItems(_homepageSectionId: string, metadata: any): Promise<PagedResults> {
         const offset = metadata?.offset ?? 0
         const request = App.createRequest({
-            url: `${KEMONO_API_URL}/${SERVICE}/posts?o=${offset}`,
+            url: `${PROXY_URL}/${SERVICE}/posts?o=${offset}`,
             method: 'GET'
         })
         const response = await this.requestManager.schedule(request, 1)
@@ -159,7 +159,7 @@ export class KemonoAfdian extends Source {
     override async getMangaDetails(mangaId: string): Promise<SourceManga> {
         const [userId, postId] = mangaId.split('/')
         const request = App.createRequest({
-            url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+            url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
             method: 'GET'
         })
         const response = await this.requestManager.schedule(request, 1)
@@ -193,7 +193,7 @@ export class KemonoAfdian extends Source {
 
         try {
             const request = App.createRequest({
-                url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+                url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
                 method: 'GET'
             })
             const response = await this.requestManager.schedule(request, 1)
@@ -230,7 +230,7 @@ export class KemonoAfdian extends Source {
         }
 
         const request = App.createRequest({
-            url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+            url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
             method: 'GET'
         })
         const response = await this.requestManager.schedule(request, 1)
@@ -249,7 +249,7 @@ export class KemonoAfdian extends Source {
 
         try {
             const request = App.createRequest({
-                url: `${KEMONO_API_URL}/creators.txt`,
+                url: `${PROXY_URL}/creators`,
                 method: 'GET'
             })
             const response = await this.requestManager.schedule(request, 1)
