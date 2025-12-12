@@ -637,7 +637,7 @@ class KemonoFanbox extends types_1.Source {
         if (!searchQuery)
             return App.createPagedResults({ results: [] });
         try {
-            const request = App.createRequest({ url: `${KEMONO_API_URL}/creators.txt`, method: 'GET' });
+            const request = App.createRequest({ url: `${KEMONO_API_URL}/creators`, method: 'GET' });
             const response = await this.requestManager.schedule(request, 1);
             const creators = JSON.parse(response.data ?? '[]');
             const filtered = creators.filter(c => c.service === SERVICE && c.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(offset, offset + 20);
