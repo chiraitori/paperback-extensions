@@ -462,8 +462,8 @@ __exportStar(require("./compat/DyamicUI"), exports);
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KemonoPatreon = exports.KemonoPatreonInfo = void 0;
 const types_1 = require("@paperback/types");
-const KEMONO_BASE_URL = 'https://kemono.cr';
-const KEMONO_API_URL = 'https://kemono.cr/api/v1';
+const KEMONO_BASE_URL = 'https://kemono.su';
+const PROXY_URL = 'https://image.chiraitori.io.vn/api/kemono';
 const SERVICE = 'patreon';
 const SERVICE_NAME = 'Patreon';
 exports.KemonoPatreonInfo = {
@@ -521,7 +521,7 @@ class KemonoPatreon extends types_1.Source {
         sectionCallback(section);
         try {
             const request = App.createRequest({
-                url: `${KEMONO_API_URL}/${SERVICE}/posts`,
+                url: `${PROXY_URL}/${SERVICE}/posts`,
                 method: 'GET'
             });
             const response = await this.requestManager.schedule(request, 1);
@@ -553,7 +553,7 @@ class KemonoPatreon extends types_1.Source {
     async getViewMoreItems(_homepageSectionId, metadata) {
         const offset = metadata?.offset ?? 0;
         const request = App.createRequest({
-            url: `${KEMONO_API_URL}/${SERVICE}/posts?o=${offset}`,
+            url: `${PROXY_URL}/${SERVICE}/posts?o=${offset}`,
             method: 'GET'
         });
         const response = await this.requestManager.schedule(request, 1);
@@ -580,7 +580,7 @@ class KemonoPatreon extends types_1.Source {
     async getMangaDetails(mangaId) {
         const [userId, postId] = mangaId.split('/');
         const request = App.createRequest({
-            url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+            url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
             method: 'GET'
         });
         const response = await this.requestManager.schedule(request, 1);
@@ -611,7 +611,7 @@ class KemonoPatreon extends types_1.Source {
         ];
         try {
             const request = App.createRequest({
-                url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+                url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
                 method: 'GET'
             });
             const response = await this.requestManager.schedule(request, 1);
@@ -645,7 +645,7 @@ class KemonoPatreon extends types_1.Source {
             });
         }
         const request = App.createRequest({
-            url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+            url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
             method: 'GET'
         });
         const response = await this.requestManager.schedule(request, 1);
@@ -660,7 +660,7 @@ class KemonoPatreon extends types_1.Source {
         if (!searchQuery)
             return App.createPagedResults({ results: [] });
         try {
-            const request = App.createRequest({ url: `${KEMONO_API_URL}/creators.txt`, method: 'GET' });
+            const request = App.createRequest({ url: `${PROXY_URL}/creators`, method: 'GET' });
             const response = await this.requestManager.schedule(request, 1);
             const creators = JSON.parse(response.data ?? '[]');
             const filtered = creators.filter(c => c.service === SERVICE && c.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(offset, offset + 20);
