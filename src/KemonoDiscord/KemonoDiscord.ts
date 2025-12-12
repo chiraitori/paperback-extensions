@@ -19,7 +19,7 @@ import {
 } from '@paperback/types'
 
 const KEMONO_BASE_URL = 'https://kemono.cr'
-const KEMONO_API_URL = 'https://kemono.cr/api/v1'
+const KEMONO_API_URL = 'https://image.chiraitori.io.vn/api/kemono'
 const SERVICE = 'discord'
 const SERVICE_NAME = 'Discord'
 
