@@ -525,7 +525,8 @@ class KemonoDiscord extends types_1.Source {
                 method: 'GET'
             });
             const response = await this.requestManager.schedule(request, 1);
-            const posts = JSON.parse(response.data ?? '[]');
+            const jsonData = JSON.parse(response.data ?? '{}');
+            const posts = jsonData.posts ?? jsonData ?? [];
             const items = posts.slice(0, 20).map(post => {
                 let thumbnail = '';
                 if (post.file?.path && this.isImage(post.file.name)) {
@@ -557,7 +558,8 @@ class KemonoDiscord extends types_1.Source {
             method: 'GET'
         });
         const response = await this.requestManager.schedule(request, 1);
-        const posts = JSON.parse(response.data ?? '[]');
+        const jsonData = JSON.parse(response.data ?? '{}');
+        const posts = jsonData.posts ?? jsonData ?? [];
         const items = posts.map(post => {
             let thumbnail = '';
             if (post.file?.path && this.isImage(post.file.name)) {

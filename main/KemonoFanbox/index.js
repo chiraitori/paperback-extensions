@@ -531,7 +531,8 @@ class KemonoFanbox extends types_1.Source {
         try {
             const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/posts`, method: 'GET' });
             const response = await this.requestManager.schedule(request, 1);
-            const posts = JSON.parse(response.data ?? '[]');
+            const data = JSON.parse(response.data ?? '{}');
+            const posts = data.posts ?? data ?? [];
             const items = posts.slice(0, 20).map(post => {
                 let thumbnail = '';
                 if (post.file?.path && this.isImage(post.file.name)) {
@@ -560,7 +561,8 @@ class KemonoFanbox extends types_1.Source {
         const offset = metadata?.offset ?? 0;
         const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/posts?o=${offset}`, method: 'GET' });
         const response = await this.requestManager.schedule(request, 1);
-        const posts = JSON.parse(response.data ?? '[]');
+        const jsonData = JSON.parse(response.data ?? '{}');
+        const posts = jsonData.posts ?? jsonData ?? [];
         const items = posts.map(post => {
             let thumbnail = '';
             if (post.file?.path && this.isImage(post.file.name))
