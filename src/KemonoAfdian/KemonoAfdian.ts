@@ -103,7 +103,7 @@ export class KemonoAfdian extends Source {
                 method: 'GET'
             })
             const response = await this.requestManager.schedule(request, 1)
-            const posts: KemonoPost[] = JSON.parse(response.data ?? '[]')
+            const jsonData = JSON.parse(response.data ?? '{}'); const posts: KemonoPost[] = jsonData.posts ?? jsonData ?? []
 
             const items: PartialSourceManga[] = posts.slice(0, 20).map(post => {
                 let thumbnail = ''
@@ -135,7 +135,7 @@ export class KemonoAfdian extends Source {
             method: 'GET'
         })
         const response = await this.requestManager.schedule(request, 1)
-        const posts: KemonoPost[] = JSON.parse(response.data ?? '[]')
+        const jsonData = JSON.parse(response.data ?? '{}'); const posts: KemonoPost[] = jsonData.posts ?? jsonData ?? []
 
         const items: PartialSourceManga[] = posts.map(post => {
             let thumbnail = ''
