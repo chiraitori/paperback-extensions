@@ -18,8 +18,8 @@ import {
     SourceIntents,
 } from '@paperback/types'
 
-const KEMONO_BASE_URL = 'https://kemono.su'
-const PROXY_URL = 'https://image.chiraitori.io.vn/api/kemono'
+const KEMONO_BASE_URL = 'https://kemono.cr'
+const KEMONO_API_URL = 'https://kemono.cr/api/v1'
 const SERVICE = 'dlsite'
 const SERVICE_NAME = 'DLsite'
 
@@ -103,7 +103,7 @@ export class KemonoDLsite extends Source {
 
         try {
             const request = App.createRequest({
-                url: `${PROXY_URL}/${SERVICE}/posts`,
+                url: `${KEMONO_API_URL}/${SERVICE}/posts`,
                 method: 'GET'
             })
             const response = await this.requestManager.schedule(request, 1)
@@ -136,7 +136,7 @@ export class KemonoDLsite extends Source {
         const offset = metadata?.offset ?? 0
 
         const request = App.createRequest({
-            url: `${PROXY_URL}/${SERVICE}/posts?o=${offset}`,
+            url: `${KEMONO_API_URL}/${SERVICE}/posts?o=${offset}`,
             method: 'GET'
         })
         const response = await this.requestManager.schedule(request, 1)
@@ -168,7 +168,7 @@ export class KemonoDLsite extends Source {
         const [userId, postId] = mangaId.split('/')
 
         const request = App.createRequest({
-            url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+            url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
             method: 'GET'
         })
         const response = await this.requestManager.schedule(request, 1)
@@ -211,7 +211,7 @@ export class KemonoDLsite extends Source {
 
         try {
             const request = App.createRequest({
-                url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+                url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
                 method: 'GET'
             })
             const response = await this.requestManager.schedule(request, 1)
@@ -251,7 +251,7 @@ export class KemonoDLsite extends Source {
 
         // Image chapter
         const request = App.createRequest({
-            url: `${PROXY_URL}/${SERVICE}/user/${userId}/post/${postId}`,
+            url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`,
             method: 'GET'
         })
         const response = await this.requestManager.schedule(request, 1)
@@ -279,7 +279,7 @@ export class KemonoDLsite extends Source {
 
         try {
             const request = App.createRequest({
-                url: `${PROXY_URL}/creators`,
+                url: `${KEMONO_API_URL}/creators`,
                 method: 'GET'
             })
             const response = await this.requestManager.schedule(request, 1)
