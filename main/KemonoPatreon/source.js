@@ -463,7 +463,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.KemonoPatreon = exports.KemonoPatreonInfo = void 0;
 const types_1 = require("@paperback/types");
 const KEMONO_BASE_URL = 'https://kemono.cr';
-const KEMONO_API_URL = 'https://kemono.cr/api/v1';
+const KEMONO_API_URL = 'https://image.chiraitori.io.vn/api/kemono';
 const SERVICE = 'patreon';
 const SERVICE_NAME = 'Patreon';
 exports.KemonoPatreonInfo = {
