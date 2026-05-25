@@ -21,7 +21,7 @@ import {
 const SERVER_URL = 'https://image.chiraitori.io.vn'
 
 export const PixivInfo: SourceInfo = {
-    version: '1.0.0',
+    version: '1.0.1',
     name: 'Pixiv',
     icon: 'icon.png',
     author: 'image-api',
@@ -50,8 +50,8 @@ export class PixivInterceptor implements SourceInterceptor {
 
 export class Pixiv extends Source {
     requestManager = App.createRequestManager({
-        requestsPerSecond: 4,
-        requestTimeout: 20000,
+        requestsPerSecond: 8,
+        requestTimeout: 45000,
         interceptor: new PixivInterceptor()
     })
 
@@ -232,7 +232,7 @@ export class Pixiv extends Source {
 
         const pages: string[] = []
         for (const page of data.data ?? []) {
-            const imageUrl = page.original || page.regular || ''
+            const imageUrl = page.regular || page.small || page.original || ''
             if (imageUrl) {
                 pages.push(`${serverUrl}/api/image/?url=${encodeURIComponent(imageUrl)}`)
             }
