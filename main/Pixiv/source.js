@@ -464,7 +464,7 @@ exports.Pixiv = exports.PixivInterceptor = exports.PixivInfo = void 0;
 const types_1 = require("@paperback/types");
 const SERVER_URL = 'https://image.chiraitori.io.vn';
 exports.PixivInfo = {
-    version: '1.0.0',
+    version: '1.0.1',
     name: 'Pixiv',
     icon: 'icon.png',
     author: 'image-api',
@@ -493,8 +493,8 @@ class Pixiv extends types_1.Source {
     constructor() {
         super(...arguments);
         this.requestManager = App.createRequestManager({
-            requestsPerSecond: 4,
-            requestTimeout: 20000,
+            requestsPerSecond: 8,
+            requestTimeout: 45000,
             interceptor: new PixivInterceptor()
         });
     }
@@ -648,7 +648,7 @@ class Pixiv extends types_1.Source {
         }
         const pages = [];
         for (const page of data.data ?? []) {
-            const imageUrl = page.original || page.regular || '';
+            const imageUrl = page.regular || page.small || page.original || '';
             if (imageUrl) {
                 pages.push(`${serverUrl}/api/image/?url=${encodeURIComponent(imageUrl)}`);
             }
