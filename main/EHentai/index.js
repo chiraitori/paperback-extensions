@@ -546,7 +546,7 @@ class EHentaiInterceptor {
     }
 }
 exports.EHentaiInfo = {
-    version: '1.0.0',
+    version: '1.0.1',
     name: 'E-Hentai',
     icon: 'icon.png',
     author: 'chiraitori',
@@ -705,7 +705,9 @@ class EHentai extends types_1.Source {
         const html = await this.get(`${BASE_URL}/?${params.join('&')}`);
         const $ = this.cheerio.load(html);
         const results = [];
-        $('td.glname').closest('tr').each((_index, row) => {
+        $('tr').each((_index, row) => {
+            if ($('td.glname', row).length === 0)
+                return;
             const link = $('td.glname a[href*="/g/"]', row).first();
             const href = link.attr('href') ?? '';
             let identifier;
@@ -751,9 +753,15 @@ class EHentai extends types_1.Source {
             const namespace = $('td.tc', row).text().replace(':', '').trim().toLowerCase();
             if (!namespace)
                 return;
-            const labels = $('td:not(.tc) a', row).toArray()
-                .map(element => $(element).text().trim())
-                .filter(Boolean);
+            const labels = [];
+            $('td:not(.tc) a', row).each((_tagIndex, element) => {
+                const wrappedElement = element;
+                const label = (typeof wrappedElement.text === 'function'
+                    ? wrappedElement.text()
+                    : $(element).text()).trim();
+                if (label)
+                    labels.push(label);
+            });
             if (labels.length === 0)
                 return;
             tagValues[namespace] = labels;
@@ -799,9 +807,16 @@ class EHentai extends types_1.Source {
             const suffix = page === 0 ? '' : `?p=${page}`;
             const html = await this.get(`${BASE_URL}/g/${gid}/${token}/${suffix}`);
             const $ = this.cheerio.load(html);
-            const pageUrls = $('#gdt > a[href*="/s/"]').toArray()
-                .map(element => normalizeUrl($(element).attr('href') ?? ''))
-                .filter(Boolean);
+            const pageUrls = [];
+            $('#gdt > a[href*="/s/"]').each((_linkIndex, element) => {
+                const wrappedElement = element;
+                const href = typeof wrappedElement.attr === 'function'
+                    ? wrappedElement.attr('href')
+                    : $(element).attr('href');
+                const url = normalizeUrl(href ?? '');
+                if (url)
+                    pageUrls.push(url);
+            });
             if (pageUrls.length === 0)
                 break;
             let added = 0;
