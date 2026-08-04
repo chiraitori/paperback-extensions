@@ -466,6 +466,7 @@ const BASE_URL = 'https://e-hentai.org';
 const DEFAULT_CATEGORIES = 0;
 const ALL_CATEGORIES = 1023;
 const THUMBNAILS_PER_PAGE = 20;
+const IMAGE_RESOLVE_BATCH_SIZE = 40;
 const CATEGORY_TAGS = [
     { id: 'category:2', label: 'Doujinshi', bit: 2 },
     { id: 'category:4', label: 'Manga', bit: 4 },
@@ -546,7 +547,7 @@ class EHentaiInterceptor {
     }
 }
 exports.EHentaiInfo = {
-    version: '1.0.1',
+    version: '1.0.2',
     name: 'E-Hentai',
     icon: 'icon.png',
     author: 'chiraitori',
@@ -564,7 +565,7 @@ class EHentai extends types_1.Source {
     constructor() {
         super(...arguments);
         this.requestManager = App.createRequestManager({
-            requestsPerSecond: 6,
+            requestsPerSecond: 15,
             requestTimeout: 30000,
             interceptor: new EHentaiInterceptor(),
         });
@@ -660,8 +661,8 @@ class EHentai extends types_1.Source {
         const pageCount = Math.max(1, Number.parseInt(chapterId, 10) || 1);
         const imagePageUrls = await this.getImagePageUrls(mangaId, pageCount);
         const pages = [];
-        for (let index = 0; index < imagePageUrls.length; index += 20) {
-            const batch = imagePageUrls.slice(index, index + 20);
+        for (let index = 0; index < imagePageUrls.length; index += IMAGE_RESOLVE_BATCH_SIZE) {
+            const batch = imagePageUrls.slice(index, index + IMAGE_RESOLVE_BATCH_SIZE);
             const imageUrls = await Promise.all(batch.map(async (url) => {
                 try {
                     return await this.getImageUrl(url);
