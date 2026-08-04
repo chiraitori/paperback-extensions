@@ -466,7 +466,8 @@ const BASE_URL = 'https://e-hentai.org';
 const DEFAULT_CATEGORIES = 0;
 const ALL_CATEGORIES = 1023;
 const THUMBNAILS_PER_PAGE = 20;
-const IMAGE_RESOLVE_BATCH_SIZE = 40;
+const IMAGE_RESOLVE_BATCH_SIZE = 200;
+const IMAGE_URL_CACHE_TTL_MS = 10 * 60 * 1000;
 const CATEGORY_TAGS = [
     { id: 'category:2', label: 'Doujinshi', bit: 2 },
     { id: 'category:4', label: 'Manga', bit: 4 },
@@ -547,7 +548,7 @@ class EHentaiInterceptor {
     }
 }
 exports.EHentaiInfo = {
-    version: '1.0.2',
+    version: '1.0.3',
     name: 'E-Hentai',
     icon: 'icon.png',
     author: 'chiraitori',
@@ -565,10 +566,12 @@ class EHentai extends types_1.Source {
     constructor() {
         super(...arguments);
         this.requestManager = App.createRequestManager({
-            requestsPerSecond: 15,
+            requestsPerSecond: 20,
             requestTimeout: 30000,
             interceptor: new EHentaiInterceptor(),
         });
+        this.resolvedChapterCache = new Map();
+        this.resolvingChapters = new Map();
     }
     getMangaShareUrl(mangaId) {
         const { gid, token } = parseGalleryIdentifier(mangaId);
@@ -658,7 +661,41 @@ class EHentai extends types_1.Source {
             })];
     }
     async getChapterDetails(mangaId, chapterId) {
+        const cacheKey = `${mangaId}:${chapterId}`;
+        const cached = this.resolvedChapterCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            return App.createChapterDetails({
+                id: chapterId,
+                mangaId,
+                pages: [...cached.pages],
+            });
+        }
+        if (cached)
+            this.resolvedChapterCache.delete(cacheKey);
         const pageCount = Math.max(1, Number.parseInt(chapterId, 10) || 1);
+        let resolving = this.resolvingChapters.get(cacheKey);
+        if (!resolving) {
+            resolving = this.resolveChapterPages(mangaId, pageCount);
+            this.resolvingChapters.set(cacheKey, resolving);
+        }
+        let pages;
+        try {
+            pages = await resolving;
+        }
+        finally {
+            this.resolvingChapters.delete(cacheKey);
+        }
+        this.resolvedChapterCache.set(cacheKey, {
+            expiresAt: Date.now() + IMAGE_URL_CACHE_TTL_MS,
+            pages: [...pages],
+        });
+        return App.createChapterDetails({
+            id: chapterId,
+            mangaId,
+            pages,
+        });
+    }
+    async resolveChapterPages(mangaId, pageCount) {
         const imagePageUrls = await this.getImagePageUrls(mangaId, pageCount);
         const pages = [];
         for (let index = 0; index < imagePageUrls.length; index += IMAGE_RESOLVE_BATCH_SIZE) {
@@ -677,11 +714,7 @@ class EHentai extends types_1.Source {
         if (pages.length === 0) {
             throw new Error('E-Hentai returned no readable image pages. The gallery may be unavailable or the image limit was reached.');
         }
-        return App.createChapterDetails({
-            id: chapterId,
-            mangaId,
-            pages,
-        });
+        return pages;
     }
     categoriesForQuery(query) {
         const included = (query.includedTags ?? [])
@@ -801,12 +834,21 @@ class EHentai extends types_1.Source {
     }
     async getImagePageUrls(mangaId, pageCount) {
         const { gid, token } = parseGalleryIdentifier(mangaId);
+        const galleryUrl = `${BASE_URL}/g/${gid}/${token}/`;
         const urls = [];
         const seen = new Set();
         const expectedGalleryPages = Math.ceil(pageCount / THUMBNAILS_PER_PAGE);
-        for (let page = 0; page < expectedGalleryPages + 2 && urls.length < pageCount; page++) {
-            const suffix = page === 0 ? '' : `?p=${page}`;
-            const html = await this.get(`${BASE_URL}/g/${gid}/${token}/${suffix}`);
+        const firstHtml = await this.get(galleryUrl);
+        const firstPage = this.cheerio.load(firstHtml);
+        let lastPageIndex = expectedGalleryPages - 1;
+        firstPage('a[href*="?p="]').each((_linkIndex, element) => {
+            const href = firstPage(element).attr('href') ?? '';
+            const match = /[?&]p=(\d+)/.exec(href);
+            if (match?.[1])
+                lastPageIndex = Math.max(lastPageIndex, Number.parseInt(match[1], 10));
+        });
+        const remainingHtml = await Promise.all(Array.from({ length: Math.max(0, lastPageIndex) }, (_value, index) => this.get(`${galleryUrl}?p=${index + 1}`)));
+        for (const html of [firstHtml, ...remainingHtml]) {
             const $ = this.cheerio.load(html);
             const pageUrls = [];
             $('#gdt > a[href*="/s/"]').each((_linkIndex, element) => {
@@ -820,16 +862,12 @@ class EHentai extends types_1.Source {
             });
             if (pageUrls.length === 0)
                 break;
-            let added = 0;
             for (const url of pageUrls) {
                 if (seen.has(url))
                     continue;
                 seen.add(url);
                 urls.push(url);
-                added++;
             }
-            if (added === 0)
-                break;
         }
         return urls.slice(0, pageCount);
     }
