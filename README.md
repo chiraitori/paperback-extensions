@@ -1,6 +1,14 @@
-# Pixiv Paperback Extension
+# Paperback Extensions
 
-A [Paperback](https://paperback.moe/) extension for browsing Pixiv manga and illustrations through a custom proxy server.
+Community sources published at `https://chiraitori.github.io/paperback-extensions`.
+
+## Available Sources
+
+- **E-Hentai** — browse, search, filter, and read public E-Hentai galleries directly.
+- **Pixiv** — browse Pixiv manga and illustrations through the image-api proxy.
+- **Kemono services** — browse supported creator platforms through the image-api proxy.
+
+## Pixiv
 
 ## Features
 
