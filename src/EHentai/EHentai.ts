@@ -19,6 +19,7 @@ import {
 } from '@paperback/types'
 
 const BASE_URL = 'https://e-hentai.org'
+const API_URL = 'https://api.e-hentai.org/api.php'
 const DEFAULT_CATEGORIES = 0
 const ALL_CATEGORIES = 1023
 const THUMBNAILS_PER_PAGE = 20
@@ -143,7 +144,7 @@ class EHentaiInterceptor implements SourceInterceptor {
 }
 
 export const EHentaiInfo: SourceInfo = {
-    version: '1.0.3',
+    version: '1.0.4',
     name: 'E-Hentai',
     icon: 'icon.png',
     author: 'chiraitori',
@@ -311,16 +312,39 @@ export class EHentai extends Source {
 
     private async resolveChapterPages(mangaId: string, pageCount: number): Promise<string[]> {
         const imagePageUrls = await this.getImagePageUrls(mangaId, pageCount)
+        const firstImagePageUrl = imagePageUrls[0]
+        if (!firstImagePageUrl) {
+            throw new Error('E-Hentai returned no image page links for this gallery.')
+        }
+
+        const { gid } = parseGalleryIdentifier(mangaId)
         const pages: string[] = []
 
-        for (let index = 0; index < imagePageUrls.length; index += IMAGE_RESOLVE_BATCH_SIZE) {
-            const batch = imagePageUrls.slice(index, index + IMAGE_RESOLVE_BATCH_SIZE)
+        const firstPageHtml = await this.get(firstImagePageUrl)
+        const firstPage = this.cheerio.load(firstPageHtml)
+        const firstImageUrl = normalizeUrl(firstPage('#img').attr('src') ?? firstPage('#i7 a').attr('href') ?? '')
+        const showKey = /\bshowkey\s*=\s*["']([^"']+)/i.exec(firstPageHtml)?.[1] ?? ''
+
+        if (!firstImageUrl) throw new Error('E-Hentai first image page did not contain an image URL.')
+        pages.push(firstImageUrl)
+
+        const remainingImagePages = imagePageUrls.slice(1)
+
+        for (let index = 0; index < remainingImagePages.length; index += IMAGE_RESOLVE_BATCH_SIZE) {
+            const batch = remainingImagePages.slice(index, index + IMAGE_RESOLVE_BATCH_SIZE)
             const imageUrls = await Promise.all(batch.map(async url => {
                 try {
-                    return await this.getImageUrl(url)
+                    return showKey
+                        ? await this.getImageUrlFromApi(gid, url, showKey)
+                        : await this.getImageUrl(url)
                 } catch (error) {
-                    console.log(`[E-Hentai] Failed to resolve image page ${url}: ${error}`)
-                    return ''
+                    console.log(`[E-Hentai] showpage failed for ${url}, falling back to HTML: ${error}`)
+                    try {
+                        return await this.getImageUrl(url)
+                    } catch (fallbackError) {
+                        console.log(`[E-Hentai] Failed to resolve image page ${url}: ${fallbackError}`)
+                        return ''
+                    }
                 }
             }))
             pages.push(...imageUrls.filter(Boolean))
@@ -509,6 +533,39 @@ export class EHentai extends Source {
         const html = await this.get(imagePageUrl)
         const $ = this.cheerio.load(html)
         return normalizeUrl($('#img').attr('src') ?? $('#i7 a').attr('href') ?? '')
+    }
+
+    private async getImageUrlFromApi(gid: string, imagePageUrl: string, showKey: string): Promise<string> {
+        const match = /\/s\/([a-f0-9]+)\/\d+-(\d+)/i.exec(imagePageUrl)
+        if (!match?.[1] || !match[2]) throw new Error(`Invalid E-Hentai image page URL: ${imagePageUrl}`)
+
+        const response = await this.requestManager.schedule(App.createRequest({
+            url: API_URL,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Origin: BASE_URL,
+            },
+            data: JSON.stringify({
+                method: 'showpage',
+                gid: Number.parseInt(gid, 10),
+                page: Number.parseInt(match[2], 10),
+                imgkey: match[1],
+                showkey: showKey,
+            }),
+        }), 2)
+
+        if (response.status >= 400) {
+            throw new Error(`E-Hentai API returned HTTP ${response.status}`)
+        }
+
+        const payload = JSON.parse(response.data ?? '{}')
+        if (payload.error) throw new Error(String(payload.error))
+
+        const $ = this.cheerio.load(payload.i3 ?? '')
+        const imageUrl = normalizeUrl($('#img').attr('src') ?? '')
+        if (!imageUrl) throw new Error('E-Hentai API response did not contain an image URL')
+        return imageUrl
     }
 
     private async get(url: string): Promise<string> {
