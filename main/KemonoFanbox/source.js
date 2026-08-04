@@ -462,199 +462,314 @@ __exportStar(require("./compat/DyamicUI"), exports);
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KemonoFanbox = exports.KemonoFanboxInfo = void 0;
 const types_1 = require("@paperback/types");
-const KEMONO_BASE_URL = 'https://kemono.cr';
-const KEMONO_API_URL = 'https://image.chiraitori.io.vn/api/kemono';
+const KemonoSource_1 = require("../KemonoPatreon/includes/KemonoSource");
 const SERVICE = 'fanbox';
 const SERVICE_NAME = 'Fanbox';
 exports.KemonoFanboxInfo = {
-    version: '1.0.0',
+    version: '1.1.0',
     name: `Kemono ${SERVICE_NAME}`,
     icon: 'icon.png',
     author: 'chiraitori',
-    authorWebsite: 'https://github.com/chiraitori/image-api',
+    authorWebsite: 'https://github.com/chiraitori/paperback-extensions',
     description: `Browse ${SERVICE_NAME} content archived on Kemono`,
     contentRating: types_1.ContentRating.ADULT,
-    websiteBaseURL: `${KEMONO_BASE_URL}/${SERVICE}`,
+    websiteBaseURL: `https://kemono.cr/${SERVICE}`,
     sourceTags: [
         { text: '18+', type: types_1.BadgeColor.YELLOW },
         { text: 'Kemono', type: types_1.BadgeColor.BLUE },
     ],
-    intents: types_1.SourceIntents.MANGA_CHAPTERS | types_1.SourceIntents.HOMEPAGE_SECTIONS
+    intents: types_1.SourceIntents.MANGA_CHAPTERS | types_1.SourceIntents.HOMEPAGE_SECTIONS,
 };
+class KemonoFanbox extends KemonoSource_1.KemonoSource {
+    constructor() {
+        super(...arguments);
+        this.service = SERVICE;
+        this.serviceName = SERVICE_NAME;
+    }
+}
+exports.KemonoFanbox = KemonoFanbox;
+
+},{"../KemonoPatreon/includes/KemonoSource":63,"@paperback/types":61}],63:[function(require,module,exports){
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.KemonoSource = void 0;
+const types_1 = require("@paperback/types");
+const KEMONO_BASE_URL = 'https://kemono.cr';
+const KEMONO_API_URL = `${KEMONO_BASE_URL}/api/v1`;
+const KEMONO_IMAGE_URL = 'https://img.kemono.cr';
+const PAGE_SIZE = 50;
 class KemonoInterceptor {
-    async interceptResponse(response) { return response; }
+    async interceptResponse(response) {
+        return response;
+    }
     async interceptRequest(request) {
-        // DDoS-Guard bypass: Kemono requires text/css Accept header
         request.headers = {
             ...request.headers,
-            'Accept': 'text/css',
+            Accept: 'text/css',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Referer': KEMONO_BASE_URL
+            Referer: KEMONO_BASE_URL,
         };
         return request;
     }
 }
-class KemonoFanbox extends types_1.Source {
+class KemonoSource extends types_1.Source {
     constructor() {
         super(...arguments);
         this.requestManager = App.createRequestManager({
             requestsPerSecond: 3,
             requestTimeout: 30000,
-            interceptor: new KemonoInterceptor()
+            interceptor: new KemonoInterceptor(),
         });
     }
     getMangaShareUrl(mangaId) {
-        const [userId] = mangaId.split('/');
-        return `${KEMONO_BASE_URL}/${SERVICE}/user/${userId}`;
+        const parts = mangaId.split('/');
+        const userId = parts[0] === 'creator' ? parts[1] : parts[1];
+        const creatorType = this.service === 'discord' ? 'server' : 'user';
+        return `${KEMONO_BASE_URL}/${this.service}/${creatorType}/${userId}`;
     }
-    isImage(filename) {
-        const ext = filename.toLowerCase().split('.').pop() || '';
-        return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext);
+    creatorMangaId(creator) {
+        return `creator/${creator.id}/${encodeURIComponent(creator.name || creator.id)}`;
     }
-    isVideo(filename) {
-        const ext = filename.toLowerCase().split('.').pop() || '';
-        return ['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v'].includes(ext);
+    creatorIcon(userId) {
+        return `${KEMONO_IMAGE_URL}/icons/${this.service}/${userId}`;
     }
-    getFileUrl(path) {
-        if (path.startsWith('http'))
-            return path;
-        // Use proxy to bypass Kemono CDN DDoS protection
-        return `${KEMONO_API_URL}/proxy?path=${encodeURIComponent(path)}`;
+    isImage(file) {
+        const filename = `${file.name || ''}${file.path || ''}`.toLowerCase();
+        return /\.(avif|bmp|gif|jpe?g|png|webp)(?:$|\?)/.test(filename);
+    }
+    isVideo(file) {
+        const filename = `${file.name || ''}${file.path || ''}`.toLowerCase();
+        return /\.(avi|m4v|mkv|mov|mp4|webm)(?:$|\?)/.test(filename);
+    }
+    thumbnailUrl(path) {
+        return path ? `${KEMONO_IMAGE_URL}/thumbnail/data${path}` : '';
+    }
+    fileUrl(file) {
+        if (!file.path)
+            return '';
+        if (/^https?:\/\//i.test(file.path))
+            return file.path;
+        const name = file.name ? `?f=${encodeURIComponent(file.name)}` : '';
+        return `${KEMONO_BASE_URL}/data${file.path}${name}`;
+    }
+    cleanText(value) {
+        if (!value)
+            return 'No description';
+        return value
+            .replace(/<br\s*\/?\s*>/gi, '\n')
+            .replace(/<[^>]*>/g, ' ')
+            .replace(/&nbsp;/gi, ' ')
+            .replace(/&amp;/gi, '&')
+            .replace(/&lt;/gi, '<')
+            .replace(/&gt;/gi, '>')
+            .replace(/&#39;/g, "'")
+            .replace(/&quot;/gi, '"')
+            .replace(/[ \t]+/g, ' ')
+            .replace(/\n\s+/g, '\n')
+            .trim() || 'No description';
+    }
+    async getJson(url) {
+        let lastError;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                const request = App.createRequest({ url, method: 'GET' });
+                const response = await this.requestManager.schedule(request, 1);
+                return JSON.parse(response.data ?? 'null');
+            }
+            catch (error) {
+                lastError = error;
+            }
+        }
+        throw lastError;
+    }
+    async getCreators() {
+        const data = await this.getJson(`${KEMONO_API_URL}/creators`);
+        const creators = Array.isArray(data) ? data : (data?.artists ?? []);
+        return creators.filter(creator => creator.service === this.service);
+    }
+    async getCreatorPosts(userId) {
+        const posts = [];
+        for (let offset = 0; offset < 200; offset += PAGE_SIZE) {
+            const data = await this.getJson(`${KEMONO_API_URL}/${this.service}/user/${userId}/posts?o=${offset}`);
+            const page = Array.isArray(data) ? data : (data?.posts ?? []);
+            posts.push(...page);
+            if (page.length < PAGE_SIZE)
+                break;
+        }
+        return posts;
+    }
+    async getPost(userId, postId) {
+        const data = await this.getJson(`${KEMONO_API_URL}/${this.service}/user/${userId}/post/${postId}`);
+        const result = data?.post ? data : { post: data };
+        if (!result.post?.id)
+            throw new Error('Kemono returned an invalid post');
+        return result;
+    }
+    postFiles(result) {
+        const post = result.post;
+        const files = [post.file, ...(post.attachments ?? []), ...(result.previews ?? []), ...(result.attachments ?? []), ...(result.videos ?? [])]
+            .filter((file) => !!file?.path);
+        const seen = {};
+        return files.filter(file => {
+            const path = file.path;
+            if (seen[path])
+                return false;
+            seen[path] = true;
+            return true;
+        });
+    }
+    creatorTile(creator) {
+        return App.createPartialSourceManga({
+            mangaId: this.creatorMangaId(creator),
+            title: creator.name || creator.id,
+            image: this.creatorIcon(creator.id),
+            subtitle: `${creator.favorited ?? 0} favorites`,
+        });
     }
     async getHomePageSections(sectionCallback) {
         const section = App.createHomeSection({
-            id: 'recent',
-            title: `Recent ${SERVICE_NAME} Posts`,
+            id: 'recent-creators',
+            title: `Recently Updated ${this.serviceName} Creators`,
             containsMoreItems: true,
-            type: types_1.HomeSectionType.singleRowNormal
+            type: types_1.HomeSectionType.singleRowNormal,
         });
         sectionCallback(section);
         try {
-            const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/posts`, method: 'GET' });
-            const response = await this.requestManager.schedule(request, 1);
-            const data = JSON.parse(response.data ?? '{}');
-            const posts = data.posts ?? data ?? [];
-            const items = posts.slice(0, 20).map(post => {
-                let thumbnail = '';
-                if (post.file?.path && this.isImage(post.file.name)) {
-                    thumbnail = this.getFileUrl(post.file.path);
-                }
-                else {
-                    const imgAtt = (post.attachments || []).find(att => this.isImage(att.name));
-                    if (imgAtt)
-                        thumbnail = this.getFileUrl(imgAtt.path);
-                }
-                return App.createPartialSourceManga({
-                    mangaId: `${post.user}/${post.id}`,
-                    title: post.title || 'Untitled',
-                    image: thumbnail || `${KEMONO_BASE_URL}/static/kemono-logo.svg`,
-                    subtitle: new Date(post.published).toLocaleDateString()
-                });
-            });
-            section.items = items;
+            const creators = await this.getCreators();
+            creators.sort((a, b) => Number(b.updated ?? 0) - Number(a.updated ?? 0));
+            section.items = creators.slice(0, 20).map(creator => this.creatorTile(creator));
             sectionCallback(section);
         }
         catch (error) {
-            console.log(`Error: ${error}`);
+            console.log(`Kemono homepage error: ${error}`);
         }
     }
     async getViewMoreItems(_homepageSectionId, metadata) {
-        const offset = metadata?.offset ?? 0;
-        const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/posts?o=${offset}`, method: 'GET' });
-        const response = await this.requestManager.schedule(request, 1);
-        const jsonData = JSON.parse(response.data ?? '{}');
-        const posts = jsonData.posts ?? jsonData ?? [];
-        const items = posts.map(post => {
-            let thumbnail = '';
-            if (post.file?.path && this.isImage(post.file.name))
-                thumbnail = this.getFileUrl(post.file.path);
-            else {
-                const imgAtt = (post.attachments || []).find(att => this.isImage(att.name));
-                if (imgAtt)
-                    thumbnail = this.getFileUrl(imgAtt.path);
-            }
-            return App.createPartialSourceManga({
-                mangaId: `${post.user}/${post.id}`, title: post.title || 'Untitled',
-                image: thumbnail || `${KEMONO_BASE_URL}/static/kemono-logo.svg`,
-                subtitle: new Date(post.published).toLocaleDateString()
-            });
-        });
-        return App.createPagedResults({ results: items, metadata: { offset: offset + 50 } });
+        const offset = Number(metadata?.offset ?? 20);
+        const creators = await this.getCreators();
+        creators.sort((a, b) => Number(b.updated ?? 0) - Number(a.updated ?? 0));
+        const results = creators.slice(offset, offset + 20).map(creator => this.creatorTile(creator));
+        const nextMetadata = offset + results.length < creators.length ? { offset: offset + results.length } : undefined;
+        return App.createPagedResults({ results, metadata: nextMetadata });
     }
     async getMangaDetails(mangaId) {
-        const [userId, postId] = mangaId.split('/');
-        const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`, method: 'GET' });
-        const response = await this.requestManager.schedule(request, 1);
-        const post = JSON.parse(response.data ?? '{}');
-        const allFiles = [post.file, ...(post.attachments || [])].filter(f => f?.path);
-        const videoCount = allFiles.filter(f => this.isVideo(f.name)).length;
-        let description = post.content || 'No description';
-        if (videoCount > 0)
-            description = `🎬 Contains ${videoCount} video(s)\n\n${description}`;
-        const coverFile = allFiles.find(f => this.isImage(f.name));
+        const parts = mangaId.split('/');
+        if (parts[0] === 'creator') {
+            const userId = parts[1];
+            const name = decodeURIComponent(parts.slice(2).join('/') || userId);
+            return App.createSourceManga({
+                id: mangaId,
+                mangaInfo: App.createMangaInfo({
+                    titles: [name],
+                    image: this.creatorIcon(userId),
+                    author: name,
+                    artist: name,
+                    desc: `Archived ${this.serviceName} posts by ${name} on Kemono.`,
+                    status: 'Ongoing',
+                    tags: [],
+                }),
+            });
+        }
+        const userId = parts[1];
+        const postId = parts[2];
+        const result = await this.getPost(userId, postId);
+        const post = result.post;
+        const files = this.postFiles(result);
+        const cover = files.find(file => this.isImage(file));
+        const videoCount = files.filter(file => this.isVideo(file)).length;
+        const videoNote = videoCount ? `Contains ${videoCount} video attachment(s).\n\n` : '';
         return App.createSourceManga({
             id: mangaId,
             mangaInfo: App.createMangaInfo({
                 titles: [post.title || 'Untitled'],
-                image: coverFile ? this.getFileUrl(coverFile.path) : `${KEMONO_BASE_URL}/static/kemono-logo.svg`,
-                author: userId, artist: userId, desc: description, status: 'Completed', tags: []
-            })
+                image: cover ? this.thumbnailUrl(cover.path) : this.creatorIcon(userId),
+                author: userId,
+                artist: userId,
+                desc: `${videoNote}${this.cleanText(post.content || post.substring)}`,
+                status: 'Completed',
+                tags: [],
+            }),
         });
     }
     async getChapters(mangaId) {
-        const [userId, postId] = mangaId.split('/');
-        const chapters = [App.createChapter({ id: `${postId}/images`, name: 'Images', chapNum: 1, langCode: 'en' })];
-        try {
-            const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`, method: 'GET' });
-            const response = await this.requestManager.schedule(request, 1);
-            const post = JSON.parse(response.data ?? '{}');
-            const allFiles = [post.file, ...(post.attachments || [])].filter(f => f?.path);
-            let videoNum = 2;
-            for (const file of allFiles) {
-                if (this.isVideo(file.name)) {
-                    chapters.push(App.createChapter({ id: `${postId}/video/${file.path}`, name: `🎬 ${file.name}`, chapNum: videoNum++, langCode: 'en' }));
-                }
+        const parts = mangaId.split('/');
+        if (parts[0] === 'creator') {
+            if (this.service === 'discord') {
+                const server = await this.getJson(`${KEMONO_API_URL}/discord/server/${parts[1]}`);
+                const channels = server?.channels ?? [];
+                return channels.map((channel, index) => App.createChapter({
+                    id: `channel/${channel.id}`,
+                    name: channel.name || `Channel ${channel.id}`,
+                    chapNum: channels.length - index,
+                    langCode: 'en',
+                }));
             }
+            const posts = await this.getCreatorPosts(parts[1]);
+            return posts.map((post, index) => App.createChapter({
+                id: `post/${post.id}`,
+                name: post.title || `Post ${post.id}`,
+                chapNum: posts.length - index,
+                langCode: 'en',
+            }));
         }
-        catch (e) {
-            console.log(`Error: ${e}`);
-        }
-        return chapters;
+        return [App.createChapter({
+                id: `post/${parts[2]}`,
+                name: 'Images',
+                chapNum: 1,
+                langCode: 'en',
+            })];
     }
     async getChapterDetails(mangaId, chapterId) {
-        const [userId, postId] = mangaId.split('/');
-        if (chapterId.includes('/video/')) {
-            const videoPath = chapterId.split('/video/')[1];
-            return App.createChapterDetails({ id: chapterId, mangaId: mangaId, pages: [this.getFileUrl(videoPath)] });
+        const mangaParts = mangaId.split('/');
+        const userId = mangaParts[1];
+        if (this.service === 'discord' && chapterId.startsWith('channel/')) {
+            const channelId = chapterId.split('/')[1];
+            const messages = await this.getJson(`${KEMONO_API_URL}/discord/channel/${channelId}?o=0`);
+            const pages = [];
+            for (const message of messages) {
+                for (const file of message.attachments ?? []) {
+                    if (this.isImage(file))
+                        pages.push(this.fileUrl(file));
+                }
+                for (const embed of message.embeds ?? []) {
+                    const image = embed.image?.url || embed.image?.proxy_url || embed.thumbnail?.url || embed.thumbnail?.proxy_url;
+                    if (image)
+                        pages.push(image);
+                }
+            }
+            const uniquePages = pages.filter((page, index) => pages.indexOf(page) === index);
+            if (!uniquePages.length)
+                uniquePages.push(this.creatorIcon(userId));
+            return App.createChapterDetails({ id: chapterId, mangaId, pages: uniquePages });
         }
-        const request = App.createRequest({ url: `${KEMONO_API_URL}/${SERVICE}/user/${userId}/post/${postId}`, method: 'GET' });
-        const response = await this.requestManager.schedule(request, 1);
-        const post = JSON.parse(response.data ?? '{}');
-        const allFiles = [post.file, ...(post.attachments || [])].filter(f => f?.path);
-        const pages = allFiles.filter(f => this.isImage(f.name)).map(f => this.getFileUrl(f.path));
-        return App.createChapterDetails({ id: chapterId, mangaId: mangaId, pages: pages });
+        const postId = chapterId.split('/')[1] || mangaParts[2];
+        const result = await this.getPost(userId, postId);
+        const imageFiles = this.postFiles(result).filter(file => this.isImage(file));
+        const pages = imageFiles.map(file => this.fileUrl(file)).filter(Boolean);
+        if (!pages.length)
+            pages.push(this.creatorIcon(userId));
+        return App.createChapterDetails({ id: chapterId, mangaId, pages });
     }
     async getSearchResults(query, metadata) {
-        const offset = metadata?.offset ?? 0;
-        const searchQuery = query.title ?? '';
+        const searchQuery = (query.title ?? '').trim().toLowerCase();
         if (!searchQuery)
             return App.createPagedResults({ results: [] });
-        try {
-            const request = App.createRequest({ url: `${KEMONO_API_URL}/creators`, method: 'GET' });
-            const response = await this.requestManager.schedule(request, 1);
-            const creators = JSON.parse(response.data ?? '[]');
-            const filtered = creators.filter(c => c.service === SERVICE && c.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(offset, offset + 20);
-            const items = filtered.map(creator => App.createPartialSourceManga({ mangaId: `${creator.id}/creator`, title: creator.name, image: `${KEMONO_BASE_URL}/static/kemono-logo.svg`, subtitle: `${creator.favorited} favorites` }));
-            return App.createPagedResults({ results: items, metadata: { offset: offset + 20 } });
-        }
-        catch (e) {
-            return App.createPagedResults({ results: [] });
-        }
+        const offset = Number(metadata?.offset ?? 0);
+        const creators = (await this.getCreators())
+            .filter(creator => creator.id.toLowerCase().includes(searchQuery) || creator.name.toLowerCase().includes(searchQuery))
+            .sort((a, b) => Number(b.favorited ?? 0) - Number(a.favorited ?? 0));
+        const results = creators.slice(offset, offset + 20).map(creator => this.creatorTile(creator));
+        const nextMetadata = offset + results.length < creators.length ? { offset: offset + results.length } : undefined;
+        return App.createPagedResults({ results, metadata: nextMetadata });
     }
-    async getTags() { return []; }
-    async supportsTagExclusion() { return false; }
+    async getTags() {
+        return [];
+    }
+    async supportsTagExclusion() {
+        return false;
+    }
 }
-exports.KemonoFanbox = KemonoFanbox;
+exports.KemonoSource = KemonoSource;
 
 },{"@paperback/types":61}]},{},[62])(62)
 });
