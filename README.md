@@ -6,7 +6,11 @@ Community sources published at `https://chiraitori.github.io/paperback-extension
 
 - **E-Hentai** — browse, search, filter, and read public E-Hentai galleries directly.
 - **Pixiv** — browse Pixiv manga and illustrations through the image-api proxy.
-- **Kemono services** — browse supported creator platforms through the image-api proxy.
+- **Kemono services** — browse Patreon, Fanbox, Fantia, Discord, DLsite, Gumroad,
+  SubscribeStar, and Boosty creators through Kemono's current API.
+
+> Kemono's current creator index no longer contains Afdian records, so the stale
+> Afdian source was retired instead of publishing an extension with empty pages.
 
 ## Pixiv
 
