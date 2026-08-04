@@ -1,6 +1,6 @@
 # Paperback Extensions
 
-Community sources published at `https://chiraitori.github.io/paperback-extensions`.
+Community sources published at `https://chiraitori.github.io/paperback-extensions/main`.
 
 ## Available Sources
 
@@ -31,7 +31,7 @@ Community sources published at `https://chiraitori.github.io/paperback-extension
 2. Go to **Settings** → **External Sources**
 3. Add the following repository URL:
    ```
-   https://chiraitori.github.io/paperback-extensions
+   https://chiraitori.github.io/paperback-extensions/main
    ```
 4. Find **Pixiv** in the sources list and install it
 
