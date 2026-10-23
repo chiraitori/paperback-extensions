@@ -21,7 +21,7 @@ import {
 const SERVER_URL = 'https://image.chiraitori.io.vn'
 
 export const PixivInfo: SourceInfo = {
-    version: '1.0.1',
+    version: '1.0.2',
     name: 'Pixiv',
     icon: 'icon.png',
     author: 'image-api',
@@ -55,6 +55,8 @@ export class Pixiv extends Source {
         interceptor: new PixivInterceptor()
     })
 
+    private illustCache = new Map<string, { data: any, timestamp: number }>()
+
     override getMangaShareUrl(mangaId: string): string {
         return `https://www.pixiv.net/artworks/${mangaId}`
     }
@@ -65,6 +67,29 @@ export class Pixiv extends Source {
 
     override async supportsTagExclusion(): Promise<boolean> {
         return false
+    }
+
+    private async fetchIllust(mangaId: string): Promise<any> {
+        const cached = this.illustCache.get(mangaId)
+        if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+            return cached.data
+        }
+
+        const serverUrl = this.getServerUrl()
+        const request = App.createRequest({
+            url: `${serverUrl}/api/illust/${mangaId}`,
+            method: 'GET'
+        })
+
+        const response = await this.requestManager.schedule(request, 1)
+        const data = JSON.parse(response.data ?? '{}')
+
+        if (data.error) {
+            throw new Error(data.message)
+        }
+
+        this.illustCache.set(mangaId, { data: data.data, timestamp: Date.now() })
+        return data.data
     }
 
     override async getHomePageSections(sectionCallback: (section: HomeSection) => void): Promise<void> {
@@ -114,11 +139,12 @@ export class Pixiv extends Source {
                 for (const item of data.data?.contents ?? []) {
                     const pageCount = parseInt(item.illust_page_count) || 1
                     if (pageCount > 1 || item.illust_type === '1') {
+                        const pageText = `${pageCount} page${pageCount === 1 ? '' : 's'}`
                         items.push(App.createPartialSourceManga({
                             mangaId: String(item.illust_id),
                             title: item.title,
                             image: `${serverUrl}/api/image/?url=${encodeURIComponent(item.url)}`,
-                            subtitle: item.user_name
+                            subtitle: [pageText, item.user_name].filter(Boolean).join(' • ')
                         }))
                     }
                 }
@@ -147,11 +173,12 @@ export class Pixiv extends Source {
         for (const item of data.data?.contents ?? []) {
             const pageCount = parseInt(item.illust_page_count) || 1
             if (pageCount > 1 || item.illust_type === '1') {
+                const pageText = `${pageCount} page${pageCount === 1 ? '' : 's'}`
                 items.push(App.createPartialSourceManga({
                     mangaId: String(item.illust_id),
                     title: item.title,
                     image: `${serverUrl}/api/image/?url=${encodeURIComponent(item.url)}`,
-                    subtitle: item.user_name
+                    subtitle: [pageText, item.user_name].filter(Boolean).join(' • ')
                 }))
             }
         }
@@ -164,27 +191,19 @@ export class Pixiv extends Source {
 
     override async getMangaDetails(mangaId: string): Promise<SourceManga> {
         const serverUrl = this.getServerUrl()
+        const illust = await this.fetchIllust(mangaId)
 
-        const request = App.createRequest({
-            url: `${serverUrl}/api/illust/${mangaId}`,
-            method: 'GET'
-        })
-
-        const response = await this.requestManager.schedule(request, 1)
-        const data = JSON.parse(response.data ?? '{}')
-
-        if (data.error) {
-            throw new Error(data.message)
-        }
-
-        const illust = data.data
         const tagsArray = illust.tags?.tags ?? []
         const tags = tagsArray.map((tag: any) => App.createTag({
             id: tag.tag,
             label: tag.tag
         }))
 
-        const coverUrl = illust.urls?.regular || illust.urls?.small || ''
+        const coverUrl = illust.urls?.regular || illust.urls?.small || illust.urls?.original || illust.urls?.thumb || ''
+        const pageCount = parseInt(illust.pageCount) || 1
+        const pageText = `${pageCount} page${pageCount === 1 ? '' : 's'}`
+        const headerInfo = [pageText, illust.userName ? `By ${illust.userName}` : ''].filter(Boolean).join(' • ')
+        const desc = [headerInfo, illust.description].filter(Boolean).join('\n\n') || 'No description'
 
         return App.createSourceManga({
             id: mangaId,
@@ -193,7 +212,7 @@ export class Pixiv extends Source {
                 image: `${serverUrl}/api/image/?url=${encodeURIComponent(coverUrl)}`,
                 author: illust.userName,
                 artist: illust.userName,
-                desc: illust.description || 'No description',
+                desc: desc,
                 status: 'Completed',
                 tags: [App.createTagSection({
                     id: 'tags',
@@ -205,12 +224,35 @@ export class Pixiv extends Source {
     }
 
     override async getChapters(mangaId: string): Promise<Chapter[]> {
+        let pageCount = 0
+        let time: Date | undefined
+        let title = 'Full Work'
+        try {
+            const illust = await this.fetchIllust(mangaId)
+            pageCount = parseInt(illust.pageCount) || 0
+            if (illust.createDate) {
+                const parsed = new Date(illust.createDate)
+                if (!isNaN(parsed.getTime())) {
+                    time = parsed
+                }
+            }
+            if (illust.title) {
+                title = illust.title
+            }
+        } catch {
+            // fallback gracefully
+        }
+
+        const pageText = pageCount > 0 ? `${pageCount} page${pageCount === 1 ? '' : 's'}` : ''
+
         return [
             App.createChapter({
                 id: mangaId,
-                name: 'Full Work',
+                name: pageText ? `${title} [${pageText}]` : title,
+                group: pageText || undefined,
                 chapNum: 1,
-                langCode: 'jp'
+                langCode: 'jp',
+                time
             })
         ]
     }
@@ -230,9 +272,10 @@ export class Pixiv extends Source {
             throw new Error(data.message)
         }
 
+        const pagesList = Array.isArray(data.data) ? data.data : (data.data?.urls ? [data.data.urls] : [])
         const pages: string[] = []
-        for (const page of data.data ?? []) {
-            const imageUrl = page.regular || page.small || page.original || ''
+        for (const page of pagesList) {
+            const imageUrl = page.regular || page.small || page.original || page.thumb || ''
             if (imageUrl) {
                 pages.push(`${serverUrl}/api/image/?url=${encodeURIComponent(imageUrl)}`)
             }
@@ -269,11 +312,13 @@ export class Pixiv extends Source {
 
         const items: PartialSourceManga[] = []
         for (const item of data.data?.illusts ?? []) {
+            const pageCount = parseInt(item.pageCount) || 1
+            const pageText = `${pageCount} page${pageCount === 1 ? '' : 's'}`
             items.push(App.createPartialSourceManga({
                 mangaId: item.id,
                 title: item.title,
                 image: `${serverUrl}/api/image/?url=${encodeURIComponent(item.url || '')}`,
-                subtitle: item.userName
+                subtitle: [pageText, item.userName].filter(Boolean).join(' • ')
             }))
         }
 
