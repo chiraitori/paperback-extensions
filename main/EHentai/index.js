@@ -541,6 +541,14 @@ class EHentaiInterceptor {
                 path: '/',
             }));
         }
+        if (!cookies.some(cookie => cookie.name === 'sl')) {
+            cookies.push(App.createCookie({
+                name: 'sl',
+                value: 'dm_2',
+                domain: 'e-hentai.org',
+                path: '/',
+            }));
+        }
         request.cookies = cookies;
         return request;
     }
@@ -549,7 +557,7 @@ class EHentaiInterceptor {
     }
 }
 exports.EHentaiInfo = {
-    version: '1.0.4',
+    version: '1.0.5',
     name: 'E-Hentai',
     icon: 'icon.png',
     author: 'chiraitori',
@@ -623,7 +631,21 @@ class EHentai extends types_1.Source {
         return this.getGalleryResults('', definition.categories, metadata?.next);
     }
     async getSearchResults(query, metadata) {
-        return this.getGalleryResults(query.title?.trim() ?? '', this.categoriesForQuery(query), metadata?.next);
+        const terms = [];
+        if (query.title?.trim()) {
+            terms.push(query.title.trim());
+        }
+        for (const tag of query.includedTags ?? []) {
+            if (!tag.id.startsWith('category:')) {
+                terms.push(tag.id);
+            }
+        }
+        for (const tag of query.excludedTags ?? []) {
+            if (!tag.id.startsWith('category:')) {
+                terms.push(`-${tag.id}`);
+            }
+        }
+        return this.getGalleryResults(terms.join(' ').trim(), this.categoriesForQuery(query), metadata?.next);
     }
     async getMangaDetails(mangaId) {
         const gallery = await this.getGalleryPageData(mangaId);
@@ -761,10 +783,10 @@ class EHentai extends types_1.Source {
         const html = await this.get(`${BASE_URL}/?${params.join('&')}`);
         const $ = this.cheerio.load(html);
         const results = [];
-        $('tr').each((_index, row) => {
-            if ($('td.glname', row).length === 0)
-                return;
-            const link = $('td.glname a[href*="/g/"]', row).first();
+        const seenIds = new Set();
+        // 1. Parse Thumbnail mode items (div.gl1t)
+        $('div.gl1t').each((_index, item) => {
+            const link = $('a[href*="/g/"]', item).first();
             const href = link.attr('href') ?? '';
             let identifier;
             try {
@@ -773,23 +795,68 @@ class EHentai extends types_1.Source {
             catch {
                 return;
             }
-            const imageElement = $('div.glthumb img', row).first();
+            const mangaId = `${identifier.gid}/${identifier.token}`;
+            if (seenIds.has(mangaId))
+                return;
+            seenIds.add(mangaId);
+            const imageElement = $('div.gl3t img', item).first();
             const image = normalizeUrl(imageElement.attr('data-src') ?? imageElement.attr('src') ?? '');
-            const category = $('td.glcat div', row).first().text().trim();
-            const pageText = $('td.gl4c div', row).last().text().trim();
-            const uploader = $('td.gl4c a', row).first().text().trim();
+            const title = $('.gl4t', item).first().text().trim() || imageElement.attr('alt') || 'Untitled Gallery';
+            const category = $('.gl5t div.cs', item).first().text().trim();
+            const pageText = $('.gl5t div', item).filter((_, el) => $(el).text().includes('page')).first().text().trim();
+            const uploader = $('.gl5t a[href*="/uploader/"]', item).first().text().trim();
             results.push(App.createPartialSourceManga({
-                mangaId: `${identifier.gid}/${identifier.token}`,
-                title: $('.glink', row).first().text().trim() || imageElement.attr('alt') || 'Untitled Gallery',
+                mangaId,
+                title,
                 image,
                 subtitle: [category, pageText, uploader].filter(Boolean).join(' • '),
             }));
         });
-        const nextHref = $('#unext').attr('href') ?? '';
-        const nextMatch = /[?&]next=(\d+)/.exec(nextHref);
+        // 2. Parse Table mode items (Compact, Extended, Minimal)
+        if (results.length === 0) {
+            $('tr').each((_index, row) => {
+                const link = $('td.glname a[href*="/g/"], td.gl1e a[href*="/g/"], td.gl2e a[href*="/g/"], a[href*="/g/"]', row).first();
+                const href = link.attr('href') ?? '';
+                let identifier;
+                try {
+                    identifier = parseGalleryIdentifier(href);
+                }
+                catch {
+                    return;
+                }
+                const mangaId = `${identifier.gid}/${identifier.token}`;
+                if (seenIds.has(mangaId))
+                    return;
+                seenIds.add(mangaId);
+                const imageElement = $('div.glthumb img, td.gl1e img, td.gl1c img, img', row).first();
+                const image = normalizeUrl(imageElement.attr('data-src') ?? imageElement.attr('src') ?? '');
+                const category = $('td.glcat div, td.gl1e div.cs, div.cs', row).first().text().trim();
+                const pageText = $('td.gl4c div, td.gl2e div, td.gl4m div', row).last().text().trim();
+                const uploader = $('td.gl4c a, td.gl2e a, td.gl5m a, a[href*="/uploader/"]', row).first().text().trim();
+                const title = $('.glink', row).first().text().trim() || imageElement.attr('alt') || link.text().trim() || 'Untitled Gallery';
+                results.push(App.createPartialSourceManga({
+                    mangaId,
+                    title,
+                    image,
+                    subtitle: [category, pageText, uploader].filter(Boolean).join(' • '),
+                }));
+            });
+        }
+        const unextHref = $('#unext').attr('href') ?? $('#dnext').attr('href') ?? '';
+        let nextToken = /[?&](?:amp;)?next=(\d+)/i.exec(unextHref)?.[1];
+        if (!nextToken) {
+            const rawNavMatch = /id="[ud]next"[^>]*href="([^"]+)"/i.exec(html);
+            if (rawNavMatch?.[1]) {
+                nextToken = /[?&](?:amp;)?next=(\d+)/i.exec(rawNavMatch[1])?.[1];
+            }
+        }
+        if (!nextToken) {
+            const scriptMatch = /var\s+nexturl\s*=\s*"[^"]*[?&](?:amp;)?next=(\d+)[^"]*"/i.exec(html);
+            nextToken = scriptMatch?.[1];
+        }
         return App.createPagedResults({
             results,
-            metadata: nextMatch?.[1] ? { next: nextMatch[1] } : undefined,
+            metadata: nextToken ? { next: nextToken } : undefined,
         });
     }
     async getGalleryPageData(mangaId) {
