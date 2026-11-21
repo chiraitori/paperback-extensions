@@ -375,3 +375,24 @@ export function decodeScrambleKey(rawKey: string): number[] {
     }
     return order
 }
+
+export function invertPermutation(order: number[]): number[] {
+    const inv = new Array<number>(order.length).fill(0)
+    for (let i = 0; i < order.length; i++) {
+        const val = order[i]
+        if (val !== undefined) {
+            inv[val] = i
+        }
+    }
+    return inv
+}
+
+export function splitStripHeights(totalHeight: number, count = 10): number[] {
+    const base = Math.floor(totalHeight / count)
+    const rem = totalHeight % count
+    const heights: number[] = []
+    for (let i = 0; i < count; i++) {
+        heights.push(base + (i < rem ? 1 : 0))
+    }
+    return heights
+}
