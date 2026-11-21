@@ -481,6 +481,10 @@ const KEY_TOKEN_EXPIRES_AT = 'yg_token_expires_at';
 const KEY_AUTH_STATUS = 'yg_auth_status';
 const KEY_ENABLE_R18 = 'yg_enable_r18';
 const KEY_PROXY_URL = 'yg_proxy_url';
+const KEY_ON_DEVICE_DESCRAMBLE = 'yg_on_device_descramble';
+const STRIP_COUNT = 10;
+const STRIP_GAP = 4;
+const MAX_PENDING_SCRAMBLE_KEYS = 2000;
 const resolveMediaUrl = (path) => {
     if (!path)
         return '';
@@ -512,13 +516,75 @@ const formatChapterName = (ch) => {
     }
     return ch.name ?? '';
 };
+const appendQueryParam = (url, name, value) => {
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
+};
+const extractAndStripYgKey = (url) => {
+    const match = /([?&])yg_key=([^&#]*)/.exec(url);
+    if (!match) {
+        return { cleanUrl: url };
+    }
+    let decodedKey;
+    try {
+        decodedKey = decodeURIComponent(match[2] ?? '');
+    }
+    catch {
+        decodedKey = match[2];
+    }
+    let cleanUrl = url;
+    if (match[1] === '?') {
+        cleanUrl = url.replace(/\?yg_key=[^&#]*&/, '?').replace(/\?yg_key=[^&#]*/, '');
+    }
+    else {
+        cleanUrl = url.replace(/&yg_key=[^&#]*/, '');
+    }
+    return {
+        cleanUrl,
+        key: decodedKey || undefined,
+    };
+};
+const supportsOnDeviceCanvas = () => {
+    return typeof App?.createPBCanvas === 'function' && typeof App?.createPBImage === 'function';
+};
+const descrambleWithPBCanvas = (rawData, rawKey) => {
+    const order = (0, YuriGardenCrypto_1.decodeScrambleKey)(rawKey);
+    const inv = (0, YuriGardenCrypto_1.invertPermutation)(order);
+    const srcImage = App.createPBImage({ data: rawData });
+    const width = srcImage.width;
+    const height = srcImage.height;
+    const unpaddedHeight = height - STRIP_GAP * (STRIP_COUNT - 1);
+    if (width <= 0 || unpaddedHeight <= 0) {
+        return undefined;
+    }
+    const stripHeights = (0, YuriGardenCrypto_1.splitStripHeights)(unpaddedHeight, STRIP_COUNT);
+    const scrambledHeights = order.map((k) => stripHeights[k] ?? 0);
+    const prefixY = [0];
+    for (let i = 0; i < scrambledHeights.length; i++) {
+        prefixY.push((prefixY[i] ?? 0) + (scrambledHeights[i] ?? 0));
+    }
+    const canvas = App.createPBCanvas();
+    canvas.setSize(width, unpaddedHeight);
+    let destY = 0;
+    for (let t = 0; t < inv.length; t++) {
+        const srcIdx = inv[t] ?? 0;
+        const srcY = (prefixY[srcIdx] ?? 0) + STRIP_GAP * srcIdx;
+        const stripH = scrambledHeights[srcIdx] ?? 0;
+        if (stripH <= 0) {
+            continue;
+        }
+        canvas.drawImage(srcImage, 0, srcY, width, stripH, 0, destY);
+        destY += stripH;
+    }
+    return canvas.encode('jpeg');
+};
 exports.YuriGardenInfo = {
-    version: '1.0.1',
+    version: '1.0.2',
     name: 'YuriGarden',
     icon: 'icon.png',
     author: 'chiraitori',
     authorWebsite: 'https://github.com/chiraitori/paperback-extensions',
-    description: 'Read manga from YuriGarden with account login, optional R18 toggle, and unscrambler proxy support.',
+    description: 'Read manga from YuriGarden with account login, optional R18 toggle, on-device PBCanvas descrambling, and proxy fallback.',
     contentRating: types_1.ContentRating.ADULT,
     websiteBaseURL: SITE_URL,
     language: 'vi',
@@ -535,7 +601,28 @@ exports.YuriGardenInfo = {
     intents: types_1.SourceIntents.MANGA_CHAPTERS | types_1.SourceIntents.HOMEPAGE_SECTIONS | types_1.SourceIntents.SETTINGS_UI,
 };
 class YuriGardenInterceptor {
+    constructor(deps) {
+        this.pendingKeys = new Map();
+        this.deps = deps;
+    }
+    rememberKey(cleanUrl, key) {
+        if (this.pendingKeys.has(cleanUrl)) {
+            this.pendingKeys.delete(cleanUrl);
+        }
+        else if (this.pendingKeys.size >= MAX_PENDING_SCRAMBLE_KEYS) {
+            const oldestKey = this.pendingKeys.keys().next().value;
+            if (typeof oldestKey === 'string') {
+                this.pendingKeys.delete(oldestKey);
+            }
+        }
+        this.pendingKeys.set(cleanUrl, key);
+    }
     async interceptRequest(request) {
+        const extracted = extractAndStripYgKey(request.url);
+        if (extracted.key) {
+            this.rememberKey(extracted.cleanUrl, extracted.key);
+            request.url = extracted.cleanUrl;
+        }
         const headers = {
             ...(request.headers ?? {}),
         };
@@ -555,6 +642,42 @@ class YuriGardenInterceptor {
         return request;
     }
     async interceptResponse(response) {
+        const rawUrl = response.request?.url ?? '';
+        const parsed = extractAndStripYgKey(rawUrl);
+        const scrambleKey = parsed.key ?? this.pendingKeys.get(parsed.cleanUrl);
+        if (!scrambleKey || response.status >= 400 || !response.rawData) {
+            return response;
+        }
+        if (supportsOnDeviceCanvas()) {
+            try {
+                const unscrambled = descrambleWithPBCanvas(response.rawData, scrambleKey);
+                if (unscrambled) {
+                    response.rawData = unscrambled;
+                    return response;
+                }
+            }
+            catch {
+                // Fall through to proxy fallback below
+            }
+        }
+        if (this.deps) {
+            try {
+                const proxyUrl = await this.deps.getProxyUrl();
+                if (proxyUrl) {
+                    const fallbackReq = App.createRequest({
+                        url: `${proxyUrl}/unscramble?url=${encodeURIComponent(parsed.cleanUrl)}&key=${encodeURIComponent(scrambleKey)}`,
+                        method: 'GET',
+                    });
+                    const fallbackRes = await this.deps.fallbackRequestManager.schedule(fallbackReq, 1);
+                    if (fallbackRes.status < 400 && fallbackRes.rawData) {
+                        response.rawData = fallbackRes.rawData;
+                    }
+                }
+            }
+            catch {
+                // Keep original response if fallback also fails
+            }
+        }
         return response;
     }
 }
@@ -563,10 +686,17 @@ class YuriGarden extends types_1.Source {
     constructor() {
         super(...arguments);
         this.stateManager = App.createSourceStateManager();
+        this.fallbackRequestManager = App.createRequestManager({
+            requestsPerSecond: 6,
+            requestTimeout: 30000,
+        });
         this.requestManager = App.createRequestManager({
             requestsPerSecond: 6,
             requestTimeout: 30000,
-            interceptor: new YuriGardenInterceptor(),
+            interceptor: new YuriGardenInterceptor({
+                getProxyUrl: () => this.getProxyUrl(),
+                fallbackRequestManager: this.fallbackRequestManager,
+            }),
         });
     }
     getMangaShareUrl(mangaId) {
@@ -590,6 +720,13 @@ class YuriGarden extends types_1.Source {
         const stored = await this.stateManager.retrieve(KEY_PROXY_URL);
         const cleaned = String(stored ?? '').trim().replace(/\/+$/, '');
         return cleaned || DEFAULT_PROXY_URL;
+    }
+    async isOnDeviceDescrambleEnabled() {
+        const stored = await this.stateManager.retrieve(KEY_ON_DEVICE_DESCRAMBLE);
+        if (stored === null || stored === undefined) {
+            return true;
+        }
+        return Boolean(stored);
     }
     async exchangeFirebaseToken(email, name, idToken, refreshToken, expiresInSec) {
         const request = App.createRequest({
@@ -755,7 +892,7 @@ class YuriGarden extends types_1.Source {
         return App.createDUISection({
             id: 'yurigarden_settings',
             header: 'YuriGarden Settings',
-            footer: 'Sign in with a YuriGarden email/password account. R18 can only be enabled while logged in. Set an Unscrambler Proxy URL to descramble chapter images.',
+            footer: 'Sign in with a YuriGarden email/password account. R18 can only be enabled while logged in. On-Device Descramble runs locally via PBCanvas and falls back to the Unscrambler Proxy URL if needed.',
             isHidden: false,
             rows: async () => {
                 const loggedIn = await this.isLoggedIn();
@@ -818,9 +955,19 @@ class YuriGarden extends types_1.Source {
                             },
                         }),
                     }),
+                    App.createDUISwitch({
+                        id: 'on_device_descramble',
+                        label: 'On-Device Descramble (PBCanvas)',
+                        value: App.createDUIBinding({
+                            get: async () => await this.isOnDeviceDescrambleEnabled(),
+                            set: async (newValue) => {
+                                await this.stateManager.store(KEY_ON_DEVICE_DESCRAMBLE, Boolean(newValue));
+                            },
+                        }),
+                    }),
                     App.createDUIInputField({
                         id: 'proxy_url',
-                        label: 'Unscrambler Proxy URL',
+                        label: 'Unscrambler Proxy URL (Fallback)',
                         value: App.createDUIBinding({
                             get: async () => await this.getProxyUrl(),
                             set: async (newValue) => {
@@ -1038,6 +1185,7 @@ class YuriGarden extends types_1.Source {
             throw new Error('This chapter requires a password on YuriGarden');
         }
         const proxyUrl = await this.getProxyUrl();
+        const useOnDevice = (await this.isOnDeviceDescrambleEnabled()) && supportsOnDeviceCanvas();
         const pages = [];
         for (const page of resolved.pages ?? []) {
             const cleanPath = (page.url ?? '').replace('_credit', '');
@@ -1045,10 +1193,18 @@ class YuriGarden extends types_1.Source {
             if (!cdnUrl) {
                 continue;
             }
-            if (proxyUrl && page.key) {
-                // Validate key before delegating to proxy so malformed keys fail fast
+            if (page.key) {
+                // Validate key early so malformed keys fail fast
                 (0, YuriGardenCrypto_1.decodeScrambleKey)(page.key);
-                pages.push(`${proxyUrl}/unscramble?url=${encodeURIComponent(cdnUrl)}&key=${encodeURIComponent(page.key)}`);
+                if (useOnDevice) {
+                    pages.push(appendQueryParam(cdnUrl, 'yg_key', page.key));
+                }
+                else if (proxyUrl) {
+                    pages.push(`${proxyUrl}/unscramble?url=${encodeURIComponent(cdnUrl)}&key=${encodeURIComponent(page.key)}`);
+                }
+                else {
+                    pages.push(cdnUrl);
+                }
             }
             else {
                 pages.push(cdnUrl);
@@ -1066,7 +1222,7 @@ exports.YuriGarden = YuriGarden;
 },{"./YuriGardenCrypto":63,"@paperback/types":61}],63:[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.decodeScrambleKey = exports.decryptOpenSslAes = exports.aes256CbcDecrypt = exports.md5 = exports.utf8BytesToString = exports.base64ToBytes = void 0;
+exports.splitStripHeights = exports.invertPermutation = exports.decodeScrambleKey = exports.decryptOpenSslAes = exports.aes256CbcDecrypt = exports.md5 = exports.utf8BytesToString = exports.base64ToBytes = void 0;
 const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 const FACTORIALS = [1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800];
 const AES_SBOX = new Uint8Array([
@@ -1427,6 +1583,27 @@ function decodeScrambleKey(rawKey) {
     return order;
 }
 exports.decodeScrambleKey = decodeScrambleKey;
+function invertPermutation(order) {
+    const inv = new Array(order.length).fill(0);
+    for (let i = 0; i < order.length; i++) {
+        const val = order[i];
+        if (val !== undefined) {
+            inv[val] = i;
+        }
+    }
+    return inv;
+}
+exports.invertPermutation = invertPermutation;
+function splitStripHeights(totalHeight, count = 10) {
+    const base = Math.floor(totalHeight / count);
+    const rem = totalHeight % count;
+    const heights = [];
+    for (let i = 0; i < count; i++) {
+        heights.push(base + (i < rem ? 1 : 0));
+    }
+    return heights;
+}
+exports.splitStripHeights = splitStripHeights;
 
 },{}]},{},[62])(62)
 });
