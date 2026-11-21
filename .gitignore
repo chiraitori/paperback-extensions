@@ -1,0 +1,4 @@
+*.exe
+*.test
+docker-compose.override.yml
+.env
