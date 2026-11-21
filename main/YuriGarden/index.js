@@ -471,6 +471,7 @@ const FIREBASE_API_KEY = 'AIzaSyCB2wwL5MiTQMxXboaIDYQLw97APor_B0U';
 const PAGE_LIMIT = 24;
 const TOKEN_REFRESH_MARGIN_MS = 60 * 1000;
 const MANGA_TOKEN_TTL_CAP_MS = 30 * 60 * 1000;
+const DEFAULT_PROXY_URL = 'https://ctx.haimiya.tech';
 const DEFAULT_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const KEY_EMAIL = 'yg_email';
 const KEY_PASSWORD = 'yg_password';
@@ -512,7 +513,7 @@ const formatChapterName = (ch) => {
     return ch.name ?? '';
 };
 exports.YuriGardenInfo = {
-    version: '1.0.0',
+    version: '1.0.1',
     name: 'YuriGarden',
     icon: 'icon.png',
     author: 'chiraitori',
@@ -584,6 +585,11 @@ class YuriGarden extends types_1.Source {
             return false;
         }
         return Boolean(await this.stateManager.retrieve(KEY_ENABLE_R18));
+    }
+    async getProxyUrl() {
+        const stored = await this.stateManager.retrieve(KEY_PROXY_URL);
+        const cleaned = String(stored ?? '').trim().replace(/\/+$/, '');
+        return cleaned || DEFAULT_PROXY_URL;
     }
     async exchangeFirebaseToken(email, name, idToken, refreshToken, expiresInSec) {
         const request = App.createRequest({
@@ -816,10 +822,10 @@ class YuriGarden extends types_1.Source {
                         id: 'proxy_url',
                         label: 'Unscrambler Proxy URL',
                         value: App.createDUIBinding({
-                            get: async () => String((await this.stateManager.retrieve(KEY_PROXY_URL)) ?? ''),
+                            get: async () => await this.getProxyUrl(),
                             set: async (newValue) => {
                                 const cleaned = String(newValue ?? '').trim().replace(/\/+$/, '');
-                                await this.stateManager.store(KEY_PROXY_URL, cleaned);
+                                await this.stateManager.store(KEY_PROXY_URL, cleaned || DEFAULT_PROXY_URL);
                             },
                         }),
                     }),
@@ -1031,9 +1037,7 @@ class YuriGarden extends types_1.Source {
         if (resolved.isLocked && (!resolved.pages || resolved.pages.length === 0)) {
             throw new Error('This chapter requires a password on YuriGarden');
         }
-        const proxyUrl = String((await this.stateManager.retrieve(KEY_PROXY_URL)) ?? '')
-            .trim()
-            .replace(/\/+$/, '');
+        const proxyUrl = await this.getProxyUrl();
         const pages = [];
         for (const page of resolved.pages ?? []) {
             const cleanPath = (page.url ?? '').replace('_credit', '');
